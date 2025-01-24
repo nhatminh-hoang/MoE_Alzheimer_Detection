@@ -4,33 +4,61 @@ This repository contains code for the ADReSS2020 audio classification project. T
 
 ## Project Structure
 ├── pycache/ 
+
 ├── .gitignore 
+
 ├── config/ 
+
 │ ├── default_config.yaml 
+
 │ ├── experiment_configs/ 
+
 │ │ ├── ADReSS2020_MLP_mfcc.yaml 
+
 │ │ ├── ADReSS2020_MLP_waveform.yaml 
+
 ├── data/ 
+
 │ ├── ADReSS-IS2020-data/ 
+
 ├── data_preprocessing.py 
+
 ├── evaluate.py 
+
 ├── logs/ 
+
 │ ├── ADReSS2020_MLP_mfcc/ 
+
 │ ├── ADReSS2020_MLP_waveform/ 
+
 ├── models/ 
+
 │ ├── __init__.py 
+
 │ ├── base_model.py 
+
 │ ├── my_custom_model.py 
+
 │ ├── saved_models/ 
+
 ├── notebooks/ 
+
 │ ├── exploration.ipynb 
+
 │ ├── model_development.ipynb 
+
 ├── predict.py 
+
 ├── README.md 
+
 ├── requirements.txt 
+
 ├── scripts/ 
+
 │ ├── __init__.py 
+
 │ ├── utils.py 
+
 ├── train.py
 
 
