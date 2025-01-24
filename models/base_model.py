@@ -20,6 +20,7 @@ class MLP(nn.Module):
         self.relu = nn.ReLU()
         self.fc2 = nn.Linear(hidden_size, output_size)
         self.dropout = nn.Dropout(drop_out)
+        self.norm = nn.BatchNorm1d(hidden_size)
 
         self.training = train
 
@@ -30,6 +31,7 @@ class MLP(nn.Module):
 
     def forward(self, x):
         x = self.fc1(x)
+        x = self.norm(x)
         x = self.relu(x)        
         x = self.dropout(x)
         x = self.fc2(x)

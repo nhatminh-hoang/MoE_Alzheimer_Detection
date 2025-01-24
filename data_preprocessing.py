@@ -23,7 +23,10 @@ class ADreSS2020Dataset(Dataset):
         (Waveform, Sample rate) of the audio file
         Label of the audio file
     '''
-    def __init__(self, df, transforms=None, split='train', wave_type='full', mfcc=True, max_time=3):
+    def __init__(self, df, transforms=None, split='train', wave_type='full',
+                 transcript=False,
+                 mfcc=False, mel_delta_delta2=False,
+                 max_time=3):
         self.df = df.copy()
         self.split = split
         self.wave_type = wave_type
@@ -44,15 +47,18 @@ class ADreSS2020Dataset(Dataset):
         self.cached_paths = self._cache_paths()
         _, self.sr = torchaudio.load(self.cached_paths[0][0])
 
+        if self.wave_type == 'full':
+            self.max_time = 150
+
         # Preprocess MFCC dataset
         if self.mfcc:
             self.cached_data = []
             if not os.path.exists(f'{ADReSS2020_DATAPATH}/preprocessed/{split}.pt'):
-                self.cached_data = self._preprocess_dataset(split)
+                self.cached_data = self._mfcc_preprocess_dataset(split)
             else :
                 self.cached_data = torch.load(f'{ADReSS2020_DATAPATH}/preprocessed/{split}.pt', weights_only=False)
 
-    def _preprocess_dataset(self, split):
+    def _mfcc_preprocess_dataset(self, split):
         """
         Preprocess the dataset in memory-efficient batches.
         """
@@ -207,7 +213,7 @@ def load_data(data_name='ADReSS2020'):
 
     return train_df, test_df
 
-def create_data_loaders(train_df, test_df, mfcc=True, batch_size=32, data_name='ADReSS2020'):
+def create_data_loaders(train_df, test_df, wave_type='full', mfcc=True, batch_size=32, data_name='ADReSS2020'):
     """Creates PyTorch DataLoaders for training and testing sets.
 
     Args:
@@ -225,8 +231,8 @@ def create_data_loaders(train_df, test_df, mfcc=True, batch_size=32, data_name='
 
     # Create Datasets
     if data_name == 'ADReSS2020':
-        train_ds = ADreSS2020Dataset(train_df, split='train', wave_type='chunk', mfcc=mfcc)
-        test_ds = ADreSS2020Dataset(test_df, split='test', wave_type='chunk', mfcc=mfcc)
+        train_ds = ADreSS2020Dataset(train_df, split='train', wave_type=wave_type, mfcc=mfcc)
+        test_ds = ADreSS2020Dataset(test_df, split='test', wave_type=wave_type, mfcc=mfcc)
 
     val_ds = random_split(train_ds, [0.8, 0.2], generator=generator)[1]
     train_ds = random_split(train_ds, [0.8, 0.2], generator=generator)[0]

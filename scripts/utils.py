@@ -154,7 +154,7 @@ def calculate_silence_percentage(waveform, sr, silence_threshold=0.01):
     silence_percentage = silent_samples / len(waveform)
     return silence_percentage
 
-def extract_features(data, sr, n_mfcc=13):
+def extract_features(data, sr, n_mfcc=224):
     mfccs = librosa.feature.mfcc(y=data, sr=sr, n_mfcc=n_mfcc)
     return np.mean(mfccs.T, axis=0)
 

@@ -17,6 +17,12 @@ def accuracy(output, label):
     _, pred = torch.max(output, dim=1)
     return torch.sum(pred == label).item() / len(label)
 
+def lr_scheduler(optimizer, epoch, lr_decay=0.1, lr_decay_epoch=10):
+    if epoch % lr_decay_epoch == 0:
+        for param_group in optimizer.param_groups:
+            param_group['lr'] *= lr_decay
+    return optimizer
+
 def training(dt_loader, model:nn.Module, optimizer:torch.optim.Optimizer, criterion:nn.Module, flatten=False, device='cpu'):
     model.train()
     model.training = True
@@ -97,6 +103,7 @@ def fit(name_ex, train_loader, val_loader, model, epochs, optimizer, criterion,
         print(f"Epoch {epoch + 1}/{epochs}")
         train_loss, train_acc = training(train_loader, model, optimizer, criterion, flatten, device=device)
         val_loss, val_acc = testing(val_loader, model, criterion, flatten, device=device)
+        optimizer = lr_scheduler(optimizer, epoch, lr_decay=0.1, lr_decay_epoch=epochs//4)
         with torch.no_grad():
             train_losses.append(train_loss)
             train_accs.append(train_acc)
@@ -127,13 +134,14 @@ def main():
     # Getting arguments to create the new config 
     parser = argparse.ArgumentParser(description='Train a model')
     parser.add_argument('--data_name', type=str, help='Name of the dataset', default='ADReSS2020')
+    parser.add_argument('--wave_type', type=str, help='Type of waveform', default='full')
+    parser.add_argument('--mfcc', type=bool, help='Use MFCC features', default=False)
+
     parser.add_argument('--model', type=str, help='Model name')
     parser.add_argument('--flatten', type=bool, help='Flatten the input', default=False)
     parser.add_argument('--epochs', type=int, help='Number of epochs')
-    parser.add_argument('--mfcc', type=bool, help='Use MFCC features', default=False)
     parser.add_argument('--batch_size', type=int, help='Batch size', default=128)
     parser.add_argument('--lr', type=float, help='Learning rate', default=1e-3)
-    parser.add_argument('--input_size', type=int, default=14, help='Input feature dimension')
     parser.add_argument('--output_size', type=int, default=2, help='Number of output classes')
     parser.add_argument('--hidden_size', type=int, help='Hidden size', default=128)
     parser.add_argument('--dropout', type=float, help='Dropout rate', default=0.5)
@@ -163,39 +171,29 @@ def main():
             gpu_ram = torch.cuda.get_device_properties(0).total_memory
             gpu_ram_usage = 0.00000095367431640625 * args.batch_size * 14 * 128
     
-    # Setting the input size of each data_name, using mFCC or waveform features and flatten or not
-    if args.data_name == 'ADReSS2020':
-        args.output_size = 2
-        sr = 44100
-        if args.flatten:
-            if args.mfcc:
-                args.input_size = 14
-            else:
-                args.input_size = 3 * sr
-        else:
-            args.input_size = 1
-    
     print(args)
     # Create config file from the arguments
     mfcc_str = 'mfcc' if args.mfcc else 'waveform'
-    name_ex = args.data_name + '_' + args.model + '_' + mfcc_str 
+    name_ex = args.data_name + '_' + args.model + '_' + args.wave_type + '_' + mfcc_str 
     name_config = name_ex + '.yaml'
     config_path = './config/experiment_configs/' + name_config
-    if not os.path.exists(config_path):
-        config = {}
-        for arg in vars(args):
-            config[arg] = getattr(args, arg)
-        create_config(config_path, config)
-    else:
-        config = load_config(config_path)
+    
+    config = {}
+    for arg in vars(args):
+        config[arg] = getattr(args, arg)
+    create_config(config_path, config)
     
     print(config)
     # Load data
     train_df, test_df = load_data(config['data_name'])
-    train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, config['mfcc'], config['batch_size'], config['data_name'])
+    train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, 
+                                                                config['wave_type'], config['mfcc'], 
+                                                                config['batch_size'], config['data_name'])
+    input_size = next(iter(train_loader))[0].shape[1]
+    print(f"Input shape: {input_size}")
 
     # Load model
-    model = MODEL[config['model']](input_size=config['input_size'], hidden_size=config['hidden_size'], output_size=config['output_size'], drop_out=config['dropout'])
+    model = MODEL[config['model']](input_size=input_size, hidden_size=config['hidden_size'], output_size=config['output_size'], drop_out=config['dropout'])
     model.to(device)
     optimizer = optim.AdamW(model.parameters(), lr=config['lr'])
     criterion = nn.CrossEntropyLoss()
@@ -203,7 +201,7 @@ def main():
     # Train model
     train_losses, train_accs, val_losses, val_accs = fit(name_ex, train_loader, val_loader, 
                                                          model, config['epochs'], optimizer, criterion, 
-                                                         config['input_size'], config['flatten'], 
+                                                         input_size, config['flatten'], 
                                                          early_stop=config['early_stop'], 
                                                          device=device)
 
