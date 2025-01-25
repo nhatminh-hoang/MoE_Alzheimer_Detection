@@ -17,11 +17,20 @@ def accuracy(output, label):
     _, pred = torch.max(output, dim=1)
     return torch.sum(pred == label).item() / len(label)
 
-def lr_scheduler(optimizer, epoch, lr_decay=0.1, lr_decay_epoch=10):
-    if epoch % lr_decay_epoch == 0:
-        for param_group in optimizer.param_groups:
-            param_group['lr'] *= lr_decay
-    return optimizer
+def get_lr(it, warmup_steps, max_step, max_lr=1e-3, min_lr=1e-5):
+    if it < warmup_steps:
+        lr = (max_lr - min_lr) / warmup_steps * it + min_lr
+        return lr
+    if it > max_step:
+        lr = min_lr
+        return lr
+    
+    decay_ratio = (it - warmup_steps) / (max_step - warmup_steps)
+    coeff = 0.5 * (1 + torch.cos(torch.tensor(decay_ratio) * np.pi))
+    lr = min_lr + (max_lr - min_lr) * coeff
+    return lr
+
+
 
 def training(dt_loader, model:nn.Module, optimizer:torch.optim.Optimizer, criterion:nn.Module, flatten=False, device='cpu'):
     model.train()
@@ -93,6 +102,7 @@ def fit(name_ex, train_loader, val_loader, model, epochs, optimizer, criterion,
         input_size, flatten=False, device='cpu', early_stop=5):
     train_losses, train_accs = [], []
     val_losses, val_accs = [], []
+    lr_list = []
     best_val_loss = float('inf')
     early_stop_counter = 0
     create_training_log(name_ex)
@@ -103,7 +113,12 @@ def fit(name_ex, train_loader, val_loader, model, epochs, optimizer, criterion,
         print(f"Epoch {epoch + 1}/{epochs}")
         train_loss, train_acc = training(train_loader, model, optimizer, criterion, flatten, device=device)
         val_loss, val_acc = testing(val_loader, model, criterion, flatten, device=device)
-        optimizer = lr_scheduler(optimizer, epoch, lr_decay=0.1, lr_decay_epoch=epochs//4)
+
+        lr = get_lr(epoch, warmup_steps=epochs//100+5, max_step=epochs, max_lr=1e-3, min_lr=1e-5)
+        lr_list.append(lr)
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
+
         with torch.no_grad():
             train_losses.append(train_loss)
             train_accs.append(train_acc)
@@ -123,9 +138,8 @@ def fit(name_ex, train_loader, val_loader, model, epochs, optimizer, criterion,
                     break
     
     save_training_images(train_losses, train_accs, val_losses, val_accs, name_ex)
+    save_lr_plot(lr_list, name_ex)
     print(f"Training completed. Save the model to {SAVED_PATH + name_ex}.pth")
-
-    return train_losses, train_accs, val_losses, val_accs
 
 def main():
     # Device
@@ -199,11 +213,11 @@ def main():
     criterion = nn.CrossEntropyLoss()
 
     # Train model
-    train_losses, train_accs, val_losses, val_accs = fit(name_ex, train_loader, val_loader, 
-                                                         model, config['epochs'], optimizer, criterion, 
-                                                         input_size, config['flatten'], 
-                                                         early_stop=config['early_stop'], 
-                                                         device=device)
+    fit(name_ex, train_loader, val_loader, 
+        model, config['epochs'], optimizer, criterion, 
+        input_size, config['flatten'], 
+        early_stop=config['early_stop'], 
+        device=device)
 
     # Test model
     model.load_state_dict(torch.load(SAVED_PATH + f'{name_ex}.pth', weights_only=False))

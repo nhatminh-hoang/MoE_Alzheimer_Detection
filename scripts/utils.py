@@ -242,3 +242,12 @@ def save_model_summary(model, input_size: int, log_name: str):
     model_summary = summary(model, input_size=input_shape, verbose=0)
     with open(f'{LOG_PATH + log_name}/model_summary.txt', 'w') as f:
         f.write(str(model_summary))
+
+def save_lr_plot(lr_list, log_name: str):
+    '''Save the learning rate plot to a file'''
+    plt.figure(figsize=(10, 6))
+    plt.plot(lr_list)
+    plt.xlabel('Epoch')
+    plt.ylabel('Learning Rate')
+    plt.title('Learning Rate Schedule')
+    plt.savefig(f'{LOG_PATH + log_name}/learning_rate.png')
