@@ -12,16 +12,8 @@ This repository contains code for the ADReSS2020 audio classification project. T
 │       └── ... (YAML configuration files for different experiments)
 ├── data/
 │   └── ADReSS-IS2020-data/ (Contains the audio data and metadata)
-├── 
-
-data_preprocessing.py
-
- (Handles data loading, preprocessing, and DataLoader creation)
-├── 
-
-evaluate.py
-
- (Evaluates trained models on the test set)
+├── data_preprocessing.py (Handles data loading, preprocessing, and DataLoader creation)
+├── evaluate.py (Evaluates trained models on the test set)
 ├── logs/
 │   ├── ADReSS2020_CNN_chunk_mfcc/ (Logs for CNN model trained on chunked audio with MFCC features)
 │   ├── ADReSS2020_CNN_chunk_waveform/ (Logs for CNN model trained on chunked audio with waveform features)
