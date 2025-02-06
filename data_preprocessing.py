@@ -25,7 +25,7 @@ class ADreSS2020Dataset(Dataset):
     '''
     def __init__(self, df, transforms=None, split='train', wave_type='full',
                  transcript=False,
-                 mfcc=False, mel_delta_delta2=False,
+                 feature_type='mfcc',
                  max_time=3):
         self.df = df.copy()
         self.split = split
@@ -33,7 +33,8 @@ class ADreSS2020Dataset(Dataset):
         self.split_path = ADReSS2020_TRAIN_PATH if split == 'train' else ADReSS2020_TEST_PATH
         self.transforms = transforms
         self.max_time = max_time
-        self.mfcc = mfcc
+        self.mfcc = feature_type == 'mfcc'
+        self.mel_delta_delta2 = feature_type == 'mel_delta_delta2'
 
         self.fullwave_path = self.split_path + ADReSS2020_FULLWAVE
         self.chunkwave_path = self.split_path + ADReSS2020_CHUNKSWAVE
@@ -53,17 +54,25 @@ class ADreSS2020Dataset(Dataset):
         # Preprocess MFCC dataset
         if self.mfcc:
             self.cached_data = []
-            if not os.path.exists(f'{ADReSS2020_DATAPATH}/preprocessed/{split}.pt'):
+            if not os.path.exists(f'{ADReSS2020_DATAPATH}/preprocessed/mfcc_{self.wave_type}_{split}.pt'):
                 self.cached_data = self._mfcc_preprocess_dataset(split)
             else :
-                self.cached_data = torch.load(f'{ADReSS2020_DATAPATH}/preprocessed/{split}.pt', weights_only=False)
+                self.cached_data = torch.load(f'{ADReSS2020_DATAPATH}/preprocessed/mfcc_{self.wave_type}_{split}.pt', weights_only=False)
+
+        # Preprocess log-mel delta delta2 dataset
+        if self.mel_delta_delta2:
+            self.cached_data = []
+            if not os.path.exists(f'{ADReSS2020_DATAPATH}/preprocessed/logmel_delta_delta2_{self.wave_type}_{split}.pt'):
+                self.cached_data = self._logmel_delta_delta2_preprocess_dataset(split)
+            else :
+                self.cached_data = torch.load(f'{ADReSS2020_DATAPATH}/preprocessed/logmel_delta_delta2_{self.wave_type}_{split}.pt', weights_only=False)
 
     def _mfcc_preprocess_dataset(self, split):
         """
         Preprocess the dataset in memory-efficient batches.
         """
         cached_data = []
-        save_path = f'{ADReSS2020_DATAPATH}/preprocessed/{split}.pt'
+        save_path = f'{ADReSS2020_DATAPATH}/preprocessed/mfcc_{self.wave_type}_{split}.pt'
 
         # Process paths in batches
         batch_size = 50  # Adjust this based on available memory
@@ -116,6 +125,93 @@ class ADreSS2020Dataset(Dataset):
         print(f'Preprocessed dataset saved to {save_path}')
 
         return cached_data
+    
+    def _logmel_delta_delta2(self, waveform, sample_rate):
+        '''
+        Compute the log-mel spectrogram, delta, and delta-delta features of the waveform.
+        
+        Args:
+            waveform: Audio waveform
+            sample_rate: Sampling rate of the audio waveform
+            
+        Returns: (Shape: 224 x 224 x 3)
+            Log-mel spectrogram, delta, and delta-delta features 
+        '''
+        # Ensure waveform is a tensor
+        if not isinstance(waveform, torch.Tensor):
+            waveform = torch.tensor(waveform)
+
+        waveform = waveform.float()
+
+        # Calculate the required length for 224 time frames
+        required_length = 224 * 1024 + 1024  # (num_frames - 1) * hop_length + n_fft
+
+        # Pad or truncate the waveform to the required length
+        if waveform.size(1) < required_length:
+            waveform = torch.nn.functional.pad(waveform, (0, required_length - waveform.size(1)))
+        else:
+            waveform = waveform[:, :required_length]
+
+        # Compute log-mel spectrogram
+        # 224 Melbands, hop length equal to 1024, and a Hanning window 
+        # output: (224 x 224)
+        mel_spectrogram = torchaudio.transforms.MelSpectrogram(sample_rate=sample_rate,
+                                                                n_mels=224,
+                                                                hop_length=1024,
+                                                                n_fft=2048,
+                                                                window_fn=torch.hann_window)(waveform)
+
+        log_mel_spectrogram = torchaudio.transforms.AmplitudeToDB()(mel_spectrogram)
+
+        # Compute delta and delta-delta features
+        delta = torchaudio.transforms.ComputeDeltas()(log_mel_spectrogram)
+        delta_delta = torchaudio.transforms.ComputeDeltas()(delta)
+
+        # Combine features
+        features = torch.stack([log_mel_spectrogram, delta, delta_delta], dim=-1)
+        
+        return features
+    
+    def _logmel_delta_delta2_preprocess_dataset(self, split):
+        """
+        Preprocess the dataset in memory-efficient batches.
+        """
+        cached_data = []
+        save_path = f'{ADReSS2020_DATAPATH}/preprocessed/logmel_delta_delta2_{self.wave_type}_{split}.pt'
+
+        # Process paths in batches
+        batch_size = 8
+        num_batches = (len(self.cached_paths) + batch_size - 1) // batch_size
+
+        for i in tqdm(range(num_batches), desc=f'Preprocessing {split} dataset'):
+            batch_paths = self.cached_paths[i * batch_size:(i + 1) * batch_size]
+
+            batch_features = []
+            batch_labels = []
+
+            for path, label in batch_paths:
+                # Load audio waveform
+                waveform, sample_rate = torchaudio.load(path)
+
+                features = self._logmel_delta_delta2(waveform, sample_rate)
+
+                # Store in batch
+                batch_features.append(features)
+                batch_labels.append(label)
+
+            # Append batch data to cached_data
+            cached_data.extend(zip(batch_features, batch_labels))
+
+            # Clear intermediate variables to free memory
+            del batch_features, batch_labels, batch_paths
+            torch.cuda.empty_cache()  # Optional, for GPU memory management
+
+        # Save preprocessed dataset to disk
+        torch.save(cached_data, save_path)
+        print(f'Preprocessed dataset saved to {save_path}')
+
+        return cached_data
+
 
     def _cache_paths(self):
         cached_paths = []
@@ -142,7 +238,7 @@ class ADreSS2020Dataset(Dataset):
             return len(self.cached_paths)
 
     def __getitem__(self, idx):
-        if self.mfcc:
+        if self.mfcc or self.mel_delta_delta2:
             waveform, label = self.cached_data[idx]
             waveform = torch.tensor(waveform, dtype=torch.float32)
             label = torch.tensor(label, dtype=torch.long)
@@ -213,7 +309,7 @@ def load_data(data_name='ADReSS2020'):
 
     return train_df, test_df
 
-def create_data_loaders(train_df, test_df, wave_type='full', mfcc=True, batch_size=32, data_name='ADReSS2020'):
+def create_data_loaders(train_df, test_df, wave_type='full', feature_type='mfcc', batch_size=32, data_name='ADReSS2020'):
     """Creates PyTorch DataLoaders for training and testing sets.
 
     Args:
@@ -231,8 +327,8 @@ def create_data_loaders(train_df, test_df, wave_type='full', mfcc=True, batch_si
 
     # Create Datasets
     if data_name == 'ADReSS2020':
-        train_ds = ADreSS2020Dataset(train_df, split='train', wave_type=wave_type, mfcc=mfcc)
-        test_ds = ADreSS2020Dataset(test_df, split='test', wave_type=wave_type, mfcc=mfcc)
+        train_ds = ADreSS2020Dataset(train_df, split='train', wave_type=wave_type, feature_type=feature_type)
+        test_ds = ADreSS2020Dataset(test_df, split='test', wave_type=wave_type, feature_type=feature_type)
 
     val_ds = random_split(train_ds, [0.8, 0.2], generator=generator)[1]
     train_ds = random_split(train_ds, [0.8, 0.2], generator=generator)[0]
@@ -251,7 +347,10 @@ if __name__ == "__main__":
     train_df, test_df = load_data()
     print("Load data successful!")
 
-    train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, mfcc=False, batch_size=8)
+    train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, wave_type='chunk', feature_type='mel_delta_delta2')
+    # train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, wave_type='chunk', feature_type='mfcc')
+    train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, wave_type='full', feature_type='mel_delta_delta2')
+    # train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, wave_type='full', feature_type='mfcc')
     print("DataLoaders created successfully!")
 
     print("Time taken: ", f'{time.time() - start:.2f} seconds')

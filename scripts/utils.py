@@ -236,9 +236,8 @@ def save_evaluation_metrics(y_true, y_pred, log_name: str):
     with open(f'{LOG_PATH + log_name}/classification_report.txt', 'w') as f:
         f.write(report)
 
-def save_model_summary(model, input_size: int, log_name: str):
+def save_model_summary(model, input_shape: tuple, log_name: str):
     '''Save the model summary to a file'''
-    input_shape = (1, input_size)
     model_summary = summary(model, input_size=input_shape, verbose=0)
     with open(f'{LOG_PATH + log_name}/model_summary.txt', 'w') as f:
         f.write(str(model_summary))

@@ -11,6 +11,7 @@ from scripts.utils import load_config
 
 MODEL = {
     'MLP': MLP,
+    'CNN': CNN
 }
 
 def accuracy(output, label):
@@ -98,15 +99,15 @@ def evaluate(model, test_loader, criterion, flatten=False, device='cpu', name_ex
     
     save_evaluation_metrics(y_true, y_pred, name_ex)
 
-def fit(name_ex, train_loader, val_loader, model, epochs, optimizer, criterion, 
-        input_size, flatten=False, device='cpu', early_stop=5):
+def fit(name_ex, train_loader, val_loader, model, epochs, optimizer, criterion, learning_rate,
+        input_shape, flatten=False, device='cpu', early_stop=5):
     train_losses, train_accs = [], []
     val_losses, val_accs = [], []
     lr_list = []
     best_val_loss = float('inf')
     early_stop_counter = 0
     create_training_log(name_ex)
-    save_model_summary(model, input_size=input_size, log_name=name_ex)
+    save_model_summary(model, input_shape=input_shape, log_name=name_ex)
 
     for epoch in range(epochs):
         print('-'*50)
@@ -114,7 +115,7 @@ def fit(name_ex, train_loader, val_loader, model, epochs, optimizer, criterion,
         train_loss, train_acc = training(train_loader, model, optimizer, criterion, flatten, device=device)
         val_loss, val_acc = testing(val_loader, model, criterion, flatten, device=device)
 
-        lr = get_lr(epoch, warmup_steps=epochs//100+5, max_step=epochs, max_lr=1e-3, min_lr=1e-5)
+        lr = get_lr(epoch, warmup_steps=epochs//100+5, max_step=epochs, max_lr=learning_rate, min_lr=1e-6)
         lr_list.append(lr)
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
@@ -149,17 +150,17 @@ def main():
     parser = argparse.ArgumentParser(description='Train a model')
     parser.add_argument('--data_name', type=str, help='Name of the dataset', default='ADReSS2020')
     parser.add_argument('--wave_type', type=str, help='Type of waveform', default='full')
-    parser.add_argument('--mfcc', type=bool, help='Use MFCC features', default=False)
+    parser.add_argument('--feature_type', type=str, help='Use features {MFCC, LogmelDelta}', default='MFCC')
 
     parser.add_argument('--model', type=str, help='Model name')
     parser.add_argument('--flatten', type=bool, help='Flatten the input', default=False)
     parser.add_argument('--epochs', type=int, help='Number of epochs')
     parser.add_argument('--batch_size', type=int, help='Batch size', default=128)
-    parser.add_argument('--lr', type=float, help='Learning rate', default=1e-3)
+    parser.add_argument('--lr', type=float, help='Learning rate', default=1e-2)
     parser.add_argument('--output_size', type=int, default=2, help='Number of output classes')
     parser.add_argument('--hidden_size', type=int, help='Hidden size', default=128)
     parser.add_argument('--dropout', type=float, help='Dropout rate', default=0.5)
-    parser.add_argument('--early_stop', type=int, help='Early stopping', default=5)
+    parser.add_argument('--early_stop', help='Early stopping', default=5)
     
     args = parser.parse_args()
 
@@ -171,8 +172,12 @@ def main():
     if args.data_name not in ['ADReSS2020']:
         raise ValueError(f"Dataset {args.data_name} not found")
     
+    # If the early stop is not a number, set it to epochs
+    if not isinstance(args.early_stop, int):
+        args.early_stop = args.epochs
+    
     # Confirm the batch size when not using MFCC
-    if not args.mfcc and args.batch_size > 32:
+    if not args.feature_type == 'MFCC':
         # Calculate the GPU RAM usage
         gpu_ram = torch.cuda.get_device_properties(0).total_memory
         gpu_ram_usage = 0.00000095367431640625 * args.batch_size * 14 * 128
@@ -187,8 +192,8 @@ def main():
     
     print(args)
     # Create config file from the arguments
-    mfcc_str = 'mfcc' if args.mfcc else 'waveform'
-    name_ex = args.data_name + '_' + args.model + '_' + args.wave_type + '_' + mfcc_str 
+    feature_type = 'mfcc' if args.feature_type == 'MFCC' else 'mel_delta_delta2' if args.feature_type == 'LogmelDelta' else 'waveform'
+    name_ex = args.data_name + '_' + args.model + '_' + args.wave_type + '_' + feature_type 
     name_config = name_ex + '.yaml'
     config_path = './config/experiment_configs/' + name_config
     
@@ -201,11 +206,20 @@ def main():
     # Load data
     train_df, test_df = load_data(config['data_name'])
     train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, 
-                                                                config['wave_type'], config['mfcc'], 
-                                                                config['batch_size'], config['data_name'])
-    input_size = next(iter(train_loader))[0].shape[1]
-    print(f"Input shape: {input_size}")
+                                                                wave_type=config['wave_type'], 
+                                                                feature_type=feature_type,
+                                                                batch_size=config['batch_size'],
+                                                                data_name=config['data_name'])
+    input_shape = next(iter(train_loader))[0].shape
+    if config['flatten']:
+        input_size = input_shape[1]
+    else: 
+        input_size = input_shape[-1]
 
+    print(f"Input shape: {input_shape}")
+    print(f"Input size: {input_size}")
+    # import sys; sys.exit()
+    
     # Load model
     model = MODEL[config['model']](input_size=input_size, hidden_size=config['hidden_size'], output_size=config['output_size'], drop_out=config['dropout'])
     model.to(device)
@@ -213,11 +227,8 @@ def main():
     criterion = nn.CrossEntropyLoss()
 
     # Train model
-    fit(name_ex, train_loader, val_loader, 
-        model, config['epochs'], optimizer, criterion, 
-        input_size, config['flatten'], 
-        early_stop=config['early_stop'], 
-        device=device)
+    fit(name_ex, train_loader, val_loader, model, config['epochs'], optimizer, criterion, 
+        config['lr'], input_shape, config['flatten'], device=device, early_stop=config['early_stop'])
 
     # Test model
     model.load_state_dict(torch.load(SAVED_PATH + f'{name_ex}.pth', weights_only=False))

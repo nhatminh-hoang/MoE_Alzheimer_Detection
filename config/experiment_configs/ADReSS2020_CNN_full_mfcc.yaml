@@ -1,0 +1,12 @@
+batch_size: 512
+data_name: ADReSS2020
+dropout: 0.25
+early_stop: 500
+epochs: 500
+flatten: false
+hidden_size: 128
+lr: 0.001
+mfcc: true
+model: CNN
+output_size: 2
+wave_type: full
