@@ -100,7 +100,7 @@ def evaluate(model, test_loader, criterion, flatten=False, device='cpu', name_ex
     save_evaluation_metrics(y_true, y_pred, name_ex)
 
 def fit(name_ex, train_loader, val_loader, model, epochs, optimizer, criterion, learning_rate,
-        input_shape, flatten=False, device='cpu', early_stop=5):
+        input_shape, flatten, device='cpu', early_stop=5):
     train_losses, train_accs = [], []
     val_losses, val_accs = [], []
     lr_list = []
@@ -228,11 +228,11 @@ def main():
 
     # Train model
     fit(name_ex, train_loader, val_loader, model, config['epochs'], optimizer, criterion, 
-        config['lr'], input_shape, config['flatten'], device=device, early_stop=config['early_stop'])
+        config['lr'], input_shape, flatten=config['flatten'], device=device, early_stop=config['early_stop'])
 
     # Test model
     model.load_state_dict(torch.load(SAVED_PATH + f'{name_ex}.pth', weights_only=False))
-    evaluate(model, test_loader, criterion, config['flatten'], device=device, name_ex=name_ex)
+    evaluate(model, test_loader, criterion, flatten=config['flatten'], device=device, name_ex=name_ex)
 
 if __name__ == "__main__":
     main()

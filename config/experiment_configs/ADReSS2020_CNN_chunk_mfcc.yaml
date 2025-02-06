@@ -1,8 +1,8 @@
-batch_size: 128
+batch_size: 256
 data_name: ADReSS2020
 dropout: 0.5
-early_stop: 50
-epochs: 50
+early_stop: 500
+epochs: 500
 feature_type: MFCC
 flatten: false
 hidden_size: 128

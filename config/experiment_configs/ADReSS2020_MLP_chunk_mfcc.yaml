@@ -1,12 +1,12 @@
-batch_size: 512
+batch_size: 128
 data_name: ADReSS2020
-dropout: 0.5
+dropout: 0.25
 early_stop: 100
-epochs: 200
+epochs: 100
+feature_type: MFCC
 flatten: true
 hidden_size: 128
-lr: 0.001
-mfcc: true
+lr: 0.0001
 model: MLP
 output_size: 2
 wave_type: chunk

@@ -28,6 +28,7 @@ class MLP(nn.Module):
                 nn.init.zeros_(m.bias)
 
     def forward(self, x):
+        x = x.view(x.size(0), -1)
         x = self.fc1(x)
         x = self.norm(x)
         x = self.relu(x)        
@@ -44,7 +45,7 @@ class CNN(nn.Module):
         self.norm2 = nn.BatchNorm1d(hidden_size*2)
         self.conv3 = nn.Conv1d(hidden_size*2, hidden_size*4, kernel_size=3, stride=1, padding='same')
         self.norm3 = nn.BatchNorm1d(hidden_size*4)
-        self.pool = nn.AdaptiveMaxPool1d(output_size=8)
+        self.pool = nn.MaxPool1d(kernel_size=2, stride=2)
         self.global_pool = nn.AdaptiveAvgPool1d(1)
         self.fc1 = nn.Linear(hidden_size*4, hidden_size*4)
         self.fc2 = nn.Linear(hidden_size*4, output_size)
