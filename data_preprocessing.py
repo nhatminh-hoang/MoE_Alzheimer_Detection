@@ -144,7 +144,7 @@ class ADreSS2020Dataset(Dataset):
         waveform = waveform.float()
 
         # Calculate the required length for 224 time frames
-        required_length = 224 * 1024 + 1024  # (num_frames - 1) * hop_length + n_fft
+        required_length = 223 * 1024 + 1023  # (num_frames - 1) * hop_length + n_fft
 
         # Pad or truncate the waveform to the required length
         if waveform.size(1) < required_length:
@@ -158,14 +158,17 @@ class ADreSS2020Dataset(Dataset):
         mel_spectrogram = torchaudio.transforms.MelSpectrogram(sample_rate=sample_rate,
                                                                 n_mels=224,
                                                                 hop_length=1024,
-                                                                n_fft=2048,
+                                                                n_fft=1024,
                                                                 window_fn=torch.hann_window)(waveform)
 
         log_mel_spectrogram = torchaudio.transforms.AmplitudeToDB()(mel_spectrogram)
+        log_mel_spectrogram = log_mel_spectrogram.squeeze(0)
 
         # Compute delta and delta-delta features
         delta = torchaudio.transforms.ComputeDeltas()(log_mel_spectrogram)
         delta_delta = torchaudio.transforms.ComputeDeltas()(delta)
+        delta = delta.squeeze(0)
+        delta_delta = delta_delta.squeeze(0)
 
         # Combine features
         features = torch.stack([log_mel_spectrogram, delta, delta_delta], dim=-1)
@@ -242,17 +245,13 @@ class ADreSS2020Dataset(Dataset):
             waveform, label = self.cached_data[idx]
             waveform = torch.tensor(waveform, dtype=torch.float32)
             label = torch.tensor(label, dtype=torch.long)
+            waveform = waveform.unsqueeze(-1) if self.mfcc else waveform
 
         else:
             path, label = self.cached_paths[idx]
             waveform, sample_rate = torchaudio.load(path)
             waveform = pad_audio(waveform, sample_rate, self.max_time)
             waveform = waveform.squeeze(0)
-
-        if self.transforms:
-            waveform = self.transforms(waveform)
-
-        waveform = waveform.unsqueeze(-1)
 
         return waveform, label
 
@@ -349,7 +348,7 @@ if __name__ == "__main__":
 
     train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, wave_type='chunk', feature_type='mel_delta_delta2')
     # train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, wave_type='chunk', feature_type='mfcc')
-    train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, wave_type='full', feature_type='mel_delta_delta2')
+    # train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, wave_type='full', feature_type='mel_delta_delta2')
     # train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, wave_type='full', feature_type='mfcc')
     print("DataLoaders created successfully!")
 
