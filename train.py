@@ -11,12 +11,18 @@ from scripts.utils import load_config
 
 MODEL = {
     'MLP': MLP,
-    'CNN': CNN
+    'CNN': CNN,
+    'LSTM': LSTM,
+    'BiLSTM': BiLSTM,
 }
 
 def accuracy(output, label):
-    _, pred = torch.max(output, dim=1)
-    return torch.sum(pred == label).item() / len(label)
+    if output.size(1) > 1:
+        _, pred = torch.max(output, dim=1)
+        return torch.sum(pred == torch.argmax(label, dim=1)).item() / len(label)
+    else:
+        pred = torch.round(output)
+        return torch.sum(pred == label).item() / len(label)
 
 def get_lr(it, warmup_steps, max_step, max_lr=1e-3, min_lr=1e-5):
     if it < warmup_steps:
@@ -41,6 +47,8 @@ def training(dt_loader, model:nn.Module, optimizer:torch.optim.Optimizer, criter
 
     for waveform, label in dt_loader:
         waveform, label = waveform.to(device), label.to(device)
+        # One-hot encoding the label
+        label = torch.nn.functional.one_hot(label, num_classes=2).float()
         optimizer.zero_grad()
 
         if flatten:
@@ -68,6 +76,8 @@ def testing(dt_loader, model, criterion:nn.Module, flatten=False, device='cpu'):
     with torch.no_grad():
         for waveform, label in dt_loader:
             waveform, label = waveform.to(device), label.to(device)
+            # One-hot encoding the label
+            label = torch.nn.functional.one_hot(label, num_classes=2).float()
             if flatten:
                 waveform = waveform.view(waveform.size(0), -1)
             output = model(waveform)
@@ -140,6 +150,7 @@ def fit(name_ex, train_loader, val_loader, model, epochs, optimizer, criterion, 
     
     save_training_images(train_losses, train_accs, val_losses, val_accs, name_ex)
     save_lr_plot(lr_list, name_ex)
+    print('-'*50)
     print(f"Training completed. Save the model to {SAVED_PATH + name_ex}.pth")
 
 def main():
@@ -150,7 +161,7 @@ def main():
     parser = argparse.ArgumentParser(description='Train a model')
     parser.add_argument('--data_name', type=str, help='Name of the dataset', default='ADReSS2020')
     parser.add_argument('--wave_type', type=str, help='Type of waveform', default='full')
-    parser.add_argument('--feature_type', type=str, help='Use features {MFCC, LogmelDelta}', default='MFCC')
+    parser.add_argument('--feature_type', type=str, help='Use features {MFCC, LogmelDelta}', default='None')
 
     parser.add_argument('--model', type=str, help='Model name')
     parser.add_argument('--flatten', type=bool, help='Flatten the input', default=False)
@@ -175,20 +186,6 @@ def main():
     # If the early stop is not a number, set it to epochs
     if not isinstance(args.early_stop, int):
         args.early_stop = args.epochs
-    
-    # Confirm the batch size when not using MFCC
-    if not args.feature_type == 'MFCC':
-        # Calculate the GPU RAM usage
-        gpu_ram = torch.cuda.get_device_properties(0).total_memory
-        gpu_ram_usage = 0.00000095367431640625 * args.batch_size * 14 * 128
-
-        while gpu_ram_usage > gpu_ram:
-
-            input(f'GPU RAM usage is {gpu_ram_usage} and GPU RAM is {gpu_ram} consider reducing the batch size. Press Enter to continue or Ctrl+C to exit')
-            args.batch_size = int(input('Enter a new batch size: '))
-            # Calculate the GPU RAM usage=
-            gpu_ram = torch.cuda.get_device_properties(0).total_memory
-            gpu_ram_usage = 0.00000095367431640625 * args.batch_size * 14 * 128
     
     print(args)
     # Create config file from the arguments
@@ -223,14 +220,17 @@ def main():
     # Load model
     model = MODEL[config['model']](input_size=input_size, hidden_size=config['hidden_size'], output_size=config['output_size'], drop_out=config['dropout'])
     model.to(device)
-    optimizer = optim.AdamW(model.parameters(), lr=config['lr'])
-    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.AdamW(model.parameters(), lr=config['lr'], weight_decay=1e-4)
+    criterion = nn.BCELoss(reduction='mean')
 
-    # Train model
+    # # Train model
     fit(name_ex, train_loader, val_loader, model, config['epochs'], optimizer, criterion, 
         config['lr'], input_shape, flatten=config['flatten'], device=device, early_stop=config['early_stop'])
 
     # Test model
+    name_model = name_ex + '.pth'
+    path_model = SAVED_PATH + name_model
+    print(f"Load model from {path_model}")
     model.load_state_dict(torch.load(SAVED_PATH + f'{name_ex}.pth', weights_only=False))
     evaluate(model, test_loader, criterion, flatten=config['flatten'], device=device, name_ex=name_ex)
 

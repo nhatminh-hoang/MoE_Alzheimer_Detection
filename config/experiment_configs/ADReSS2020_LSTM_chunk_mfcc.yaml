@@ -7,6 +7,6 @@ feature_type: MFCC
 flatten: false
 hidden_size: 128
 lr: 0.001
-model: MLP
+model: LSTM
 output_size: 2
 wave_type: chunk

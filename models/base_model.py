@@ -33,7 +33,7 @@ class MLP(nn.Module):
         x = self.norm(x)
         x = self.relu(x)        
         x = self.dropout(x)
-        x = self.fc2(x)
+        x = nn.Sigmoid()(self.fc2(x))
         return x
 
 class CNN(nn.Module):
@@ -87,5 +87,45 @@ class CNN(nn.Module):
         x = self.fc1(x)
         x = self.relu(x)
         x = self.dropout(x)
-        x = self.fc2(x)
+        x = nn.Sigmoid()(self.fc2(x))
+        return x
+    
+class LSTM(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size, drop_out):
+        super(LSTM, self).__init__()
+        self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
+        self.fc = nn.Linear(hidden_size, output_size)
+        self.dropout = nn.Dropout(drop_out)
+        self.norm = nn.LayerNorm(hidden_size)
+
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                nn.init.zeros_(m.bias)
+
+    def forward(self, x):
+        x, _ = self.lstm(x)
+        x = self.norm(x)
+        x = self.dropout(x)
+        x = nn.Sigmoid()(self.fc(x[:, -1, :]))
+        return x
+    
+class BiLSTM(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size, drop_out):
+        super(BiLSTM, self).__init__()
+        self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True, bidirectional=True)
+        self.fc = nn.Linear(hidden_size*2, output_size)
+        self.dropout = nn.Dropout(drop_out)
+        self.norm = nn.LayerNorm(hidden_size*2)
+
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                nn.init.zeros_(m.bias)
+
+    def forward(self, x):
+        x, _ = self.lstm(x)
+        x = self.norm(x)
+        x = self.dropout(x)
+        x = nn.Sigmoid()(self.fc(x[:, -1, :]))
         return x

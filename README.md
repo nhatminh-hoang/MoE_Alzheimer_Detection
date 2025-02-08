@@ -42,8 +42,8 @@ This repository contains code for the ADReSS2020 audio classification project. T
 1.  Clone the repository:
 
     ```sh
-    git clone <repository-url>
-    cd <repository-directory>
+    git clone <https://github.com/nhatminh-hoang/MoE_Alzheimer_Detection.git>
+    cd <MoE_Alzheimer_Detection>
     ```
 2.  Install the required packages:
 
@@ -53,11 +53,7 @@ This repository contains code for the ADReSS2020 audio classification project. T
 
 ## Configuration
 
-Experiment configurations are stored in the 
-
-experiment_configs
-
- directory as YAML files. These files define the hyperparameters and settings for each training run.  Key parameters include:
+Experiment configurations are stored in the ```experiment_configs``` directory as YAML files. These files define the hyperparameters and settings for each training run.  Key parameters include:
 
 *   data_name: Name of the dataset (e.g., `ADReSS2020`).
 *   wave_type: Type of waveform used (`full` for full audio, `chunk` for smaller segments).
@@ -73,9 +69,7 @@ experiment_configs
 
 ## Data Preprocessing
 
-To preprocess the audio data and create DataLoaders, run the ```data_preprocessing.py```
-
- script:
+To preprocess the audio data and create DataLoaders, run the ```data_preprocessing.py``` script:
 
 ```sh
 python data_preprocessing.py
