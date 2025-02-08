@@ -24,7 +24,6 @@ This repository contains code for the ADReSS2020 audio classification project. T
 ├── models/
 │   ├── __init__.py
 │   ├── base_model.py (Contains base model classes like MLP and CNN)
-│   ├── my_custom_model.py (Example for custom model implementation)
 │   └── saved_models/ (Directory to store trained model weights)
 ├── notebooks/
 │   ├── exploration.ipynb (Jupyter Notebook for data exploration and visualization)
