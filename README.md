@@ -41,8 +41,8 @@ This repository contains code for the ADReSS2020 audio classification project. T
 1.  Clone the repository:
 
     ```sh
-    git clone <https://github.com/nhatminh-hoang/MoE_Alzheimer_Detection.git>
-    cd <MoE_Alzheimer_Detection>
+    git clone https://github.com/nhatminh-hoang/MoE_Alzheimer_Detection.git
+    cd MoE_Alzheimer_Detection
     ```
 2.  Install the required packages:
 
