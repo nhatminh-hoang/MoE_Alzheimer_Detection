@@ -10,10 +10,11 @@ from data_preprocessing import *  # Import your data loading function
 from scripts.utils import load_config
 
 MODEL = {
-    'MLP': MLP,
-    'CNN': CNN,
-    'LSTM': LSTM,
-    'BiLSTM': BiLSTM,
+    'MLP': MLPModel,
+    'CNN': CNNModel,
+    'LSTM': LSTMModel,
+    'BiLSTM': BiLSTMModel,
+    'Transformer': TransformerModel,
 }
 
 def accuracy(output, label):
@@ -110,7 +111,7 @@ def evaluate(model, test_loader, criterion, flatten=False, device='cpu', name_ex
     save_evaluation_metrics(y_true, y_pred, name_ex)
 
 def fit(name_ex, train_loader, val_loader, model, epochs, optimizer, criterion, learning_rate,
-        input_shape, flatten, device='cpu', early_stop=5):
+        input_shape, flatten, device='cpu', early_stop=5, USE_COMPILE=False):
     train_losses, train_accs = [], []
     val_losses, val_accs = [], []
     lr_list = []
@@ -118,6 +119,17 @@ def fit(name_ex, train_loader, val_loader, model, epochs, optimizer, criterion, 
     early_stop_counter = 0
     create_training_log(name_ex)
     save_model_summary(model, input_shape=input_shape, log_name=name_ex)
+    model = model.to(device)
+
+    if USE_COMPILE:
+        try:
+            model = torch.compile(model)
+            print("Model successfully compiled")
+        except Exception as e:
+            print(f"Warning: Could not compile model: {e}")
+            print("Falling back to eager mode")
+    else:
+        print("Running in eager mode (torch.compile disabled)")
 
     for epoch in range(epochs):
         print('-'*50)
@@ -154,8 +166,19 @@ def fit(name_ex, train_loader, val_loader, model, epochs, optimizer, criterion, 
     print(f"Training completed. Save the model to {SAVED_PATH + name_ex}.pth")
 
 def main():
-    # Device
+    # Device configuration
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if device.type == 'cuda':
+        # Check CUDA capability
+        if not torch.cuda.is_bf16_supported():
+            print("Warning: BF16 not supported on this GPU. Using FP32 instead.")
+            torch.set_float32_matmul_precision('high')
+    
+    # Suppress TorchDynamo errors to fall back to eager mode if compilation fails
+    torch._dynamo.config.suppress_errors = True
+
+    # Disable torch.compile if running on CPU or if CUDA capabilities are limited
+    USE_COMPILE = device.type == 'cuda' and torch.cuda.get_device_capability()[0] >= 7
 
     # Getting arguments to create the new config 
     parser = argparse.ArgumentParser(description='Train a model')
@@ -190,7 +213,9 @@ def main():
     print(args)
     # Create config file from the arguments
     feature_type = 'mfcc' if args.feature_type == 'MFCC' else 'mel_delta_delta2' if args.feature_type == 'LogmelDelta' else 'waveform'
-    name_ex = args.data_name + '_' + args.model + '_' + args.wave_type + '_' + feature_type 
+    name_ex = args.data_name + '_' + args.model + '_' + args.wave_type + '_' + feature_type + \
+              '_' + str(args.epochs) + 'epochs' + '_bs' + str(args.batch_size) + '_lr' + str(args.lr) + \
+              '_hs' + str(args.hidden_size) + '_do' + str(args.dropout)
     name_config = name_ex + '.yaml'
     config_path = './config/experiment_configs/' + name_config
     
@@ -220,18 +245,24 @@ def main():
     # Load model
     model = MODEL[config['model']](input_size=input_size, hidden_size=config['hidden_size'], output_size=config['output_size'], drop_out=config['dropout'])
     model.to(device)
-    optimizer = optim.AdamW(model.parameters(), lr=config['lr'], weight_decay=1e-4)
-    criterion = nn.BCELoss(reduction='mean')
+
+    # Optimizer and criterion
+    optimizer = optim.AdamW(model.parameters(), lr=config['lr'], weight_decay=1e-3)
+    criterion = nn.BCELoss()
 
     # # Train model
     fit(name_ex, train_loader, val_loader, model, config['epochs'], optimizer, criterion, 
-        config['lr'], input_shape, flatten=config['flatten'], device=device, early_stop=config['early_stop'])
+        config['lr'], input_shape, flatten=config['flatten'], device=device, early_stop=config['early_stop'],
+        USE_COMPILE=USE_COMPILE)
 
     # Test model
     name_model = name_ex + '.pth'
     path_model = SAVED_PATH + name_model
     print(f"Load model from {path_model}")
-    model.load_state_dict(torch.load(SAVED_PATH + f'{name_ex}.pth', weights_only=False))
+    state_dict = torch.load(SAVED_PATH + f'{name_ex}.pth', weights_only=False)
+    # Remove the '_orig_mod.' prefix from keys
+    clean_state_dict = {k.replace('_orig_mod.', ''): v for k, v in state_dict.items()}
+    model.load_state_dict(clean_state_dict)
     evaluate(model, test_loader, criterion, flatten=config['flatten'], device=device, name_ex=name_ex)
 
 if __name__ == "__main__":
