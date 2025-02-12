@@ -217,7 +217,7 @@ class FFN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, drop_out):
         super(FFN, self).__init__()
         self.fc1 = nn.Linear(input_size, hidden_size*4)
-        self.relu = nn.ReLU()
+        self.relu = nn.GELU()
         self.fc2 = nn.Linear(hidden_size*4, output_size)
         self.dropout = nn.Dropout(drop_out)
         self.norm = nn.LayerNorm(output_size)

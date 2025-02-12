@@ -42,8 +42,8 @@ class ADreSS2020Dataset(Dataset):
 
         # Cache paths for improved performance
         self.df = self._get_df_chunks() if wave_type == 'chunk' else self.df
-        self.ID = 'ID   ' if self.wave_type == 'full' else 'ID'
-        self.LABEL = 'Label ' if self.wave_type == 'full' else 'Label'
+        self.ID = 'ID' if self.wave_type == 'full' else 'ID'
+        self.LABEL = 'Label' if self.wave_type == 'full' else 'Label'
 
         self.cached_paths = self._cache_paths()
         _, self.sr = torchaudio.load(self.cached_paths[0][0])
@@ -269,7 +269,7 @@ class ADreSS2020Dataset(Dataset):
 
     def _get_df_chunks(self):
         df_chunks = []
-        for id, label in zip(self.df['ID   '], self.df['Label ']):
+        for id, label in zip(self.df['ID'], self.df['Label']):
             id = id.strip()
             path = self._get_path(label)
 
@@ -293,12 +293,12 @@ def load_data(data_name='ADReSS2020'):
     if data_name == 'ADReSS2020':
         # Train data
         train_AD_data = pd.read_csv(ADReSS2020_TRAIN_PATH + AD_data_txt, delimiter=';', skipinitialspace=True)
-        train_AD_data['Label '] = 1
-        train_AD_data = train_AD_data.drop(columns=['age', 'mmse', 'gender '], axis=1)
+        train_AD_data['Label'] = 1
+        train_AD_data = train_AD_data.drop(columns=['age', 'mmse', 'gender'], axis=1)
 
         train_NAD_data = pd.read_csv(ADReSS2020_TRAIN_PATH + NAD_data_txt, delimiter=';', skipinitialspace=True)
-        train_NAD_data['Label '] = 0
-        train_NAD_data = train_NAD_data.drop(columns=['age', 'mmse', 'gender '], axis=1)
+        train_NAD_data['Label'] = 0
+        train_NAD_data = train_NAD_data.drop(columns=['age', 'mmse', 'gender'], axis=1)
 
         train_df = pd.concat([train_AD_data, train_NAD_data], ignore_index=True)
 
@@ -329,8 +329,7 @@ def create_data_loaders(train_df, test_df, wave_type='full', feature_type='mfcc'
         train_ds = ADreSS2020Dataset(train_df, split='train', wave_type=wave_type, feature_type=feature_type)
         test_ds = ADreSS2020Dataset(test_df, split='test', wave_type=wave_type, feature_type=feature_type)
 
-    val_ds = random_split(train_ds, [0.8, 0.2], generator=generator)[1]
-    train_ds = random_split(train_ds, [0.8, 0.2], generator=generator)[0]
+    val_ds = test_ds
 
     # Create DataLoaders
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
