@@ -178,7 +178,7 @@ def main():
     torch._dynamo.config.suppress_errors = True
 
     # Disable torch.compile if running on CPU or if CUDA capabilities are limited
-    USE_COMPILE = device.type == 'cuda' and torch.cuda.get_device_capability()[0] >= 7
+    USE_COMPILE = device.type == 'cuda' and torch.cuda.get_device_capability()[0] >= 10
 
     # Getting arguments to create the new config 
     parser = argparse.ArgumentParser(description='Train a model')
@@ -226,8 +226,8 @@ def main():
     
     print(config)
     # Load data
-    train_df, test_df = load_data(config['data_name'])
-    train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, 
+    train_audio_files, train_labels, test_audio_files, test_labels = load_data()
+    train_loader, val_loader, test_loader = create_data_loaders(train_audio_files, train_labels, test_audio_files, test_labels,
                                                                 wave_type=config['wave_type'], 
                                                                 feature_type=feature_type,
                                                                 batch_size=config['batch_size'],

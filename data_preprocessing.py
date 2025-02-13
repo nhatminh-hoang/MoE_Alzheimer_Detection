@@ -10,275 +10,145 @@ from torch.utils.data import Dataset, DataLoader, random_split
 
 from scripts.utils import *
 
+# Define PATH
+ADReSS2020_DATAPATH = "./data/ADReSS-IS2020-data"
+ADReSS2020_TRAINPATH = os.path.join(ADReSS2020_DATAPATH, "train")
+ADReSS2020_TESTPATH = os.path.join(ADReSS2020_DATAPATH, "test")
+
+FULL_WAVE_NAME = "Full_wave_enhanced_audio"
+CHUNK_WAVE_NAME = "Normalised_audio-chunks"
+
+# Function to get file paths and labels
+def get_audio_files_and_labels(dataset_path, split_folder_path, split):
+    audio_files = []
+    labels = []
+
+    if split == 'train':
+        for folder in os.listdir(split_folder_path):
+            folder_path = os.path.join(split_folder_path, folder)
+            if os.path.isdir(folder_path) and os.path.basename(folder_path) == FULL_WAVE_NAME:
+                for label in os.listdir(folder_path):
+                    label_path = os.path.join(folder_path, label)
+                    if os.path.isdir(label_path):
+                        for file_name in os.listdir(label_path):
+                            if file_name.endswith('.wav'):
+                                audio_files.append(os.path.join(label_path, file_name))
+                                if label == 'cc':
+                                    labels.append(0)
+                                elif label == 'cd':
+                                    labels.append(1)
+    
+    elif split == 'test':
+        test_df = pd.read_csv(dataset_path + '/2020Labels.txt', delimiter=';', skipinitialspace=True)
+        test_df = test_df.drop(columns=['age', 'mmse', 'gender'], axis=1)
+        
+        for folder in os.listdir(split_folder_path):
+            folder_path = os.path.join(split_folder_path, folder)
+            if os.path.isdir(folder_path) and os.path.basename(folder_path) == FULL_WAVE_NAME:
+                for file_name in os.listdir(folder_path):
+                    if file_name.endswith('.wav'):
+                        audio_name = file_name.split('.')[0] + ' '
+                        audio_files.append(os.path.join(folder_path, file_name))
+                        labels.append(test_df[test_df['ID'] == audio_name].Label.iloc[0])
+                        
+    return audio_files, labels
+
 class ADreSS2020Dataset(Dataset):
     '''
     ADreSS2020Dataset class
 
     Args:
-        df: Pandas dataframe containing the data
-        split: 'train' or 'test'
-        wave_type: 'full' or 'chunk'
 
     Returns:
         (Waveform, Sample rate) of the audio file
         Label of the audio file
     '''
-    def __init__(self, df, transforms=None, split='train', wave_type='full',
-                 transcript=False,
-                 feature_type='mfcc',
-                 max_time=3):
-        self.df = df.copy()
+    def __init__(self, data_path, audio_files, labels, split, wave_type='full', feature_type='mfcc'):
+        self.data_path = data_path
+        self.audio_files = audio_files
+        self.labels = labels
         self.split = split
         self.wave_type = wave_type
-        self.split_path = ADReSS2020_TRAIN_PATH if split == 'train' else ADReSS2020_TEST_PATH
-        self.transforms = transforms
-        self.max_time = max_time
-        self.mfcc = feature_type == 'mfcc'
-        self.mel_delta_delta2 = feature_type == 'mel_delta_delta2'
+        self.feature_type = feature_type
 
-        self.fullwave_path = self.split_path + ADReSS2020_FULLWAVE
-        self.chunkwave_path = self.split_path + ADReSS2020_CHUNKSWAVE
-        self.transcription_path = self.split_path + ADReSS2020_TRANSCRIPTION
+        if self.feature_type == 'mfcc':
+            if self.split == 'train':
+                if os.path.exists(ADReSS2020_DATAPATH + '/preprocessed/' + 'X_train.npy') and os.path.exists(ADReSS2020_DATAPATH + '/preprocessed/' + 'y_train.npy'):
+                    self.preprocess = np.load(ADReSS2020_DATAPATH + '/preprocessed/' + 'X_train.npy'), np.load(ADReSS2020_DATAPATH + '/preprocessed/' + 'y_train.npy')
+                else:
+                    self.preprocess = self._preprocess_mfcc(audio_files, labels)
+            elif self.split == 'test':
+                if os.path.exists(ADReSS2020_DATAPATH + '/preprocessed/' + 'X_test.npy') and os.path.exists(ADReSS2020_DATAPATH + '/preprocessed/' + 'y_test.npy'):
+                    self.preprocess = np.load(ADReSS2020_DATAPATH + '/preprocessed/' + 'X_test.npy'), np.load(ADReSS2020_DATAPATH + '/preprocessed/' + 'y_test.npy')
+                else:
+                    self.preprocess = self._preprocess_mfcc(audio_files, labels)
 
-        # Cache paths for improved performance
-        self.df = self._get_df_chunks() if wave_type == 'chunk' else self.df
-        self.ID = 'ID' if self.wave_type == 'full' else 'ID'
-        self.LABEL = 'Label' if self.wave_type == 'full' else 'Label'
-
-        self.cached_paths = self._cache_paths()
-        _, self.sr = torchaudio.load(self.cached_paths[0][0])
-
-        if self.wave_type == 'full':
-            self.max_time = 150
-
-        # Preprocess MFCC dataset
-        if self.mfcc:
-            self.cached_data = []
-            if not os.path.exists(f'{ADReSS2020_DATAPATH}/preprocessed/mfcc_{self.wave_type}_{split}.pt'):
-                self.cached_data = self._mfcc_preprocess_dataset(split)
-            else :
-                self.cached_data = torch.load(f'{ADReSS2020_DATAPATH}/preprocessed/mfcc_{self.wave_type}_{split}.pt', weights_only=False)
-
-        # Preprocess log-mel delta delta2 dataset
-        if self.mel_delta_delta2:
-            self.cached_data = []
-            if not os.path.exists(f'{ADReSS2020_DATAPATH}/preprocessed/logmel_delta_delta2_{self.wave_type}_{split}.pt'):
-                self.cached_data = self._logmel_delta_delta2_preprocess_dataset(split)
-            else :
-                self.cached_data = torch.load(f'{ADReSS2020_DATAPATH}/preprocessed/logmel_delta_delta2_{self.wave_type}_{split}.pt', weights_only=False)
-
-    def _mfcc_preprocess_dataset(self, split):
-        """
-        Preprocess the dataset in memory-efficient batches.
-        """
-        cached_data = []
-        save_path = f'{ADReSS2020_DATAPATH}/preprocessed/mfcc_{self.wave_type}_{split}.pt'
-
-        # Process paths in batches
-        batch_size = 50  # Adjust this based on available memory
-        num_batches = (len(self.cached_paths) + batch_size - 1) // batch_size
-
-        for i in tqdm(range(num_batches), desc=f'Preprocessing {split} dataset'):
-            batch_paths = self.cached_paths[i * batch_size:(i + 1) * batch_size]
-
-            batch_features = []
-            batch_labels = []
-
-            for path, label in batch_paths:
-                # Load audio waveform
-                waveform, sample_rate = torchaudio.load(path)
-                waveform = waveform.numpy()
-
-                # Apply augmentations
-                augmented = [
-                    waveform,
-                    add_noise(waveform),
-                    pitch_shift(waveform, sample_rate),
-                    time_stretch(waveform, 0.9),
-                    time_stretch(waveform, 1.1),
-                ]
-
-                for aug_data in augmented:
-                    # Pad the waveform
-                    padded_waveform = pad_audio(torch.tensor(aug_data), sample_rate, self.max_time).numpy()
-
-                    # Extract features
-                    features = extract_features(padded_waveform, sample_rate)
-                    silence_percentage = calculate_silence_percentage(padded_waveform, sample_rate)
-
-                    # Combine features
-                    combined_features = np.append(features, silence_percentage)
-
-                    # Store in batch
-                    batch_features.append(combined_features)
-                    batch_labels.append(label)
-
-            # Append batch data to cached_data
-            cached_data.extend(zip(batch_features, batch_labels))
-
-            # Clear intermediate variables to free memory
-            del batch_features, batch_labels, batch_paths
-            torch.cuda.empty_cache()  # Optional, for GPU memory management
-
-        # Save preprocessed dataset to disk
-        torch.save(cached_data, save_path)
-        print(f'Preprocessed dataset saved to {save_path}')
-
-        return cached_data
-    
-    def _logmel_delta_delta2(self, waveform, sample_rate):
-        '''
-        Compute the log-mel spectrogram, delta, and delta-delta features of the waveform.
-        
-        Args:
-            waveform: Audio waveform
-            sample_rate: Sampling rate of the audio waveform
-            
-        Returns: (Shape: 224 x 224 x 3)
-            Log-mel spectrogram, delta, and delta-delta features 
-        '''
-        # Ensure waveform is a tensor
-        if not isinstance(waveform, torch.Tensor):
-            waveform = torch.tensor(waveform)
-
-        waveform = waveform.float()
-
-        # Calculate the required length for 224 time frames
-        required_length = 223 * 1024 + 1023  # (num_frames - 1) * hop_length + n_fft
-
-        # Pad or truncate the waveform to the required length
-        if waveform.size(1) < required_length:
-            waveform = torch.nn.functional.pad(waveform, (0, required_length - waveform.size(1)))
         else:
-            waveform = waveform[:, :required_length]
-
-        # Compute log-mel spectrogram
-        # 224 Melbands, hop length equal to 1024, and a Hanning window 
-        # output: (224 x 224)
-        mel_spectrogram = torchaudio.transforms.MelSpectrogram(sample_rate=sample_rate,
-                                                                n_mels=224,
-                                                                hop_length=1024,
-                                                                n_fft=1024,
-                                                                window_fn=torch.hann_window)(waveform)
-
-        log_mel_spectrogram = torchaudio.transforms.AmplitudeToDB()(mel_spectrogram)
-        log_mel_spectrogram = log_mel_spectrogram.squeeze(0)
-
-        # Compute delta and delta-delta features
-        delta = torchaudio.transforms.ComputeDeltas()(log_mel_spectrogram)
-        delta_delta = torchaudio.transforms.ComputeDeltas()(delta)
-        delta = delta.squeeze(0)
-        delta_delta = delta_delta.squeeze(0)
-
-        # Combine features
-        features = torch.stack([log_mel_spectrogram, delta, delta_delta], dim=-1)
-        
-        return features
-    
-    def _logmel_delta_delta2_preprocess_dataset(self, split):
-        """
-        Preprocess the dataset in memory-efficient batches.
-        """
-        cached_data = []
-        save_path = f'{ADReSS2020_DATAPATH}/preprocessed/logmel_delta_delta2_{self.wave_type}_{split}.pt'
-
-        # Process paths in batches
-        batch_size = 8
-        num_batches = (len(self.cached_paths) + batch_size - 1) // batch_size
-
-        for i in tqdm(range(num_batches), desc=f'Preprocessing {split} dataset'):
-            batch_paths = self.cached_paths[i * batch_size:(i + 1) * batch_size]
-
-            batch_features = []
-            batch_labels = []
-
-            for path, label in batch_paths:
-                # Load audio waveform
-                waveform, sample_rate = torchaudio.load(path)
-
-                features = self._logmel_delta_delta2(waveform, sample_rate)
-
-                # Store in batch
-                batch_features.append(features)
-                batch_labels.append(label)
-
-            # Append batch data to cached_data
-            cached_data.extend(zip(batch_features, batch_labels))
-
-            # Clear intermediate variables to free memory
-            del batch_features, batch_labels, batch_paths
-            torch.cuda.empty_cache()  # Optional, for GPU memory management
-
-        # Save preprocessed dataset to disk
-        torch.save(cached_data, save_path)
-        print(f'Preprocessed dataset saved to {save_path}')
-
-        return cached_data
-
-
-    def _cache_paths(self):
-        cached_paths = []
-        for idx, row in self.df.iterrows():
-            id = row[self.ID].strip()
-            label = row[self.LABEL]
-            path = self._get_path(label)
-
-            if self.wave_type == 'full':
-                file_path = os.path.join(path, f'{id}.wav')
-            elif self.wave_type == 'chunk':
-                # For chunk, we assume the paths are already available in the DataFrame
-                file_path = row['Path']
-
-            if os.path.exists(file_path):
-                cached_paths.append((file_path, label))
-
-        return cached_paths
+            self.preprocess = prepare_test_data(audio_files, labels)
 
     def __len__(self):
-        if self.mfcc:
-            return len(self.cached_data)
-        else:
-            return len(self.cached_paths)
-
+        return len(self.preprocess[0])
+    
     def __getitem__(self, idx):
-        if self.mfcc or self.mel_delta_delta2:
-            waveform, label = self.cached_data[idx]
-            waveform = torch.tensor(waveform, dtype=torch.float32)
-            label = torch.tensor(label, dtype=torch.long)
-            waveform = waveform.unsqueeze(-1) if self.mfcc else waveform
-
-        else:
-            path, label = self.cached_paths[idx]
-            waveform, sample_rate = torchaudio.load(path)
-            waveform = pad_audio(waveform, sample_rate, self.max_time)
-            waveform = waveform.squeeze(0)
-
-        return waveform, label
-
-    def _get_path(self, label):
+        return np.expand_dims(self.preprocess[0][idx], -1).astype(np.float32), self.preprocess[1][idx]
+    
+    def _preprocess_mfcc(self, audio_files, labels):
+        custom_window_size = 1024
+        custom_hop_length = 256
+        
         if self.split == 'train':
-            AD_FOLDER = 'cc' if label == 0 else 'cd'
+            # Prepare training data
+            audio_data = []
+            audio_labels = []
+
+            for batch_data, batch_labels in process_batches(audio_files, labels, batch_size=8):
+                # Process each batch (e.g., further pre-processing or saving results)
+                audio_data.extend(batch_data)
+                audio_labels.extend(batch_labels)
+
+            segmented_data = []
+            segmented_labels = []
+
+            # Segment the audio data into 25-second segments
+            for data, label in zip(audio_data, audio_labels):
+                sr = librosa.get_samplerate(audio_files[0])
+                segments = segment_audio(data, sr)
+                segmented_data.extend(segments)
+                segmented_labels.extend([label] * len(segments))
+            del audio_data, audio_labels
+
+            # Extract features
+            features = []
+
+            for segment in segmented_data:
+                mfccs = extract_features(segment, sr, window_size=custom_window_size, hop_length=custom_hop_length)
+                features.append(mfccs)
+
+            X = np.array(features)
+            y = np.array(segmented_labels)
+            del features, segmented_data, segmented_labels
+
+            # Save the preprocessed data
+            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'X_train.npy', X)
+            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'y_train.npy', y)
+
         elif self.split == 'test':
-            AD_FOLDER = ''
+            segmented_test_data, segmented_test_labels = prepare_test_data(audio_files, labels)
+            features_test = []
+            for segment in segmented_test_data:
+                sr = librosa.get_samplerate(audio_files[0])
+                mfccs = extract_features(segment, sr, window_size=custom_window_size, hop_length=custom_hop_length)
+                features_test.append(mfccs)
 
-        path = self.fullwave_path if self.wave_type == 'full' else self.chunkwave_path
-        if AD_FOLDER:
-            path = os.path.join(path, AD_FOLDER)
+            X = np.array(features_test)
+            y = segmented_test_labels
+            del features_test, segmented_test_data, segmented_test_labels
 
-        return path
+            # Save the preprocessed data
+            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'X_test.npy', X)
+            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'y_test.npy', y)
 
-    def _get_df_chunks(self):
-        df_chunks = []
-        for id, label in zip(self.df['ID'], self.df['Label']):
-            id = id.strip()
-            path = self._get_path(label)
-
-            for file_name in os.listdir(path):
-                if file_name.endswith('.wav') and id in file_name:
-                    file_path = os.path.join(path, file_name)
-                    if os.path.exists(file_path):
-                        df_chunks.append({'ID': id, 'Label': label, 'Path': file_path})
-        return pd.DataFrame(df_chunks)
+        return X, y
 
 def load_data(data_name='ADReSS2020'):
     """Loads data from a CSV file.
@@ -287,33 +157,22 @@ def load_data(data_name='ADReSS2020'):
         data_name (str): Name of the dataset to load.
 
     Returns:
-        train_df, test_df: Pandas DataFrames containing the training and testing data.
+        train_audio_files (list), train_labels (list), test_audio_files (list), test_labels (list): Data from the specified dataset.
     """
 
     if data_name == 'ADReSS2020':
-        # Train data
-        train_AD_data = pd.read_csv(ADReSS2020_TRAIN_PATH + AD_data_txt, delimiter=';', skipinitialspace=True)
-        train_AD_data['Label'] = 1
-        train_AD_data = train_AD_data.drop(columns=['age', 'mmse', 'gender'], axis=1)
+        # Load train and test data
+        train_audio_files, train_labels = get_audio_files_and_labels(ADReSS2020_DATAPATH, ADReSS2020_TRAINPATH, split='train')
+        test_audio_files, test_labels = get_audio_files_and_labels(ADReSS2020_DATAPATH, ADReSS2020_TESTPATH, split='test')
 
-        train_NAD_data = pd.read_csv(ADReSS2020_TRAIN_PATH + NAD_data_txt, delimiter=';', skipinitialspace=True)
-        train_NAD_data['Label'] = 0
-        train_NAD_data = train_NAD_data.drop(columns=['age', 'mmse', 'gender'], axis=1)
+    return train_audio_files, train_labels, test_audio_files, test_labels
 
-        train_df = pd.concat([train_AD_data, train_NAD_data], ignore_index=True)
-
-        # Test data
-        test_df = pd.read_csv(ADReSS2020_DATAPATH + '/2020Labels.txt', delimiter=';', skipinitialspace=True)
-        test_df = test_df.drop(columns=['age', 'mmse', 'gender'], axis=1)
-
-    return train_df, test_df
-
-def create_data_loaders(train_df, test_df, wave_type='full', feature_type='mfcc', batch_size=32, data_name='ADReSS2020'):
+def create_data_loaders(train_audio_files, train_labels, test_audio_files, test_labels, 
+                        wave_type='full', feature_type='mfcc', batch_size=32, data_name='ADReSS2020'):
     """Creates PyTorch DataLoaders for training and testing sets.
 
     Args:
-        train_df (pd.DataFrame): Pandas DataFrame containing the training data.
-        test_df (pd.DataFrame): Pandas DataFrame containing the testing data.
+
         mfcc (bool): Whether to use MFCC features.
         batch_size (int): Batch size for the DataLoaders.
 
@@ -326,8 +185,8 @@ def create_data_loaders(train_df, test_df, wave_type='full', feature_type='mfcc'
 
     # Create Datasets
     if data_name == 'ADReSS2020':
-        train_ds = ADreSS2020Dataset(train_df, split='train', wave_type=wave_type, feature_type=feature_type)
-        test_ds = ADreSS2020Dataset(test_df, split='test', wave_type=wave_type, feature_type=feature_type)
+        train_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, train_audio_files, train_labels, split='train', wave_type=wave_type, feature_type=feature_type)
+        test_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, test_audio_files, test_labels, split='test', wave_type=wave_type, feature_type=feature_type)
 
     val_ds = test_ds
 
@@ -336,19 +195,15 @@ def create_data_loaders(train_df, test_df, wave_type='full', feature_type='mfcc'
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
     test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
 
-
     return train_loader, val_loader, test_loader
 
 if __name__ == "__main__":
     start = time.time()
 
-    train_df, test_df = load_data()
+    train_audio_files, train_labels, test_audio_files, test_labels = load_data()
     print("Load data successful!")
 
-    train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, wave_type='chunk', feature_type='mel_delta_delta2')
-    # train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, wave_type='chunk', feature_type='mfcc')
-    # train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, wave_type='full', feature_type='mel_delta_delta2')
-    # train_loader, val_loader, test_loader = create_data_loaders(train_df, test_df, wave_type='full', feature_type='mfcc')
+    train_loader, val_loader, test_loader = create_data_loaders(train_audio_files, train_labels, test_audio_files, test_labels, feature_type='wave')
     print("DataLoaders created successfully!")
 
     print("Time taken: ", f'{time.time() - start:.2f} seconds')

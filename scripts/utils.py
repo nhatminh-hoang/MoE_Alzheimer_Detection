@@ -1,5 +1,6 @@
 import os
 import yaml
+from tqdm import tqdm
 
 import torch
 import numpy as np
@@ -115,8 +116,6 @@ def pitch_shift(data, sampling_rate, pitch_factor=2):
 def time_stretch(data, rate=0.8):
     return librosa.effects.time_stretch(data, rate=rate)
 
-
-
 def pad_audio(waveform: torch.Tensor, sr, segment_length=25):
     segment_samples = sr * segment_length
 
@@ -129,34 +128,61 @@ def pad_audio(waveform: torch.Tensor, sr, segment_length=25):
         waveform = waveform[:, :segment_samples]
 
     return waveform
-
-def load_and_augment_audio(waveform, sr, label, max_time):
-    audio_data = []
-    audio_labels = []
+# Load and augment the audio data
+def load_and_augment_audio(file_path, label, audio_data, audio_labels):
+    data, sr = librosa.load(file_path, sr=None)
     augmented_data = [
-        waveform,
-        add_noise(waveform),
-        pitch_shift(waveform, sr),
-        time_stretch(waveform, 0.9),
-        time_stretch(waveform, 1.1)
+        data,
+        add_noise(data),
+        pitch_shift(data, sr),
+        time_stretch(data, 0.9),
+        time_stretch(data, 1.1)
     ]
     for aug_data in augmented_data:
-        # pad
-        aug_data = pad_audio(torch.tensor(aug_data), sr, max_time)
-
-        audio_data.append(aug_data.tolist())
+        audio_data.append(aug_data)
         audio_labels.append(label)
 
-    return np.array(audio_data), np.array(audio_labels)
+def process_batches(files, labels, batch_size):
+    for i in range(0, len(files), batch_size):
+        batch_files = files[i:i+batch_size]
+        batch_labels = labels[i:i+batch_size]
+        batch_audio_data = []
+        batch_audio_labels = []
+        for file_path, label in tqdm(zip(batch_files, batch_labels), total=len(batch_files),
+                                       desc=f"Processing batch {i//batch_size + 1}"):
+            # Reference: [`scripts.utils.load_and_augment_audio`](scripts/utils.py#L130)
+            load_and_augment_audio(file_path, label, batch_audio_data, batch_audio_labels)
+        yield batch_audio_data, batch_audio_labels
+
+# Segment the audio data into 25-second segments
+def segment_audio(data, sr, segment_length=25):
+    segment_samples = sr * segment_length
+    segments = []
+    for start in range(0, len(data), segment_samples):
+        end = start + segment_samples
+        if end <= len(data):
+            segments.append(data[start:end])
+    return segments
 
 def calculate_silence_percentage(waveform, sr, silence_threshold=0.01):
     silent_samples = np.sum(np.abs(waveform) < silence_threshold)
     silence_percentage = silent_samples / len(waveform)
     return silence_percentage
 
-def extract_features(data, sr, n_mfcc=224):
-    mfccs = librosa.feature.mfcc(y=data, sr=sr, n_mfcc=n_mfcc)
+# Feature extraction with customizable window size and hop length
+def extract_features(data, sr, n_mfcc=13, window_size=2048, hop_length=512):
+    mfccs = librosa.feature.mfcc(y=data, sr=sr, n_mfcc=n_mfcc, n_fft=window_size, hop_length=hop_length)
     return np.mean(mfccs.T, axis=0)
+
+def prepare_test_data(test_audio_files, test_labels):
+    segmented_test_data = []
+    segmented_test_labels = []
+    for file_path, label in zip(test_audio_files, test_labels):
+        data, sr = librosa.load(file_path, sr=None)
+        segments = segment_audio(data, sr)
+        segmented_test_data.extend(segments)
+        segmented_test_labels.extend([label] * len(segments))
+    return segmented_test_data, segmented_test_labels
 
 def plot_time_distribution(df, split='train'):
   for label in [0, 1]:
