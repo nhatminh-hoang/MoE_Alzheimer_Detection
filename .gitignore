@@ -172,4 +172,3 @@ data/
 # Models weights folder
 models/saved_models/
 train_outs/
-logs/
