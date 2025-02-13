@@ -272,7 +272,7 @@ def save_model_summary(model, input_shape: tuple, log_name: str):
         from torchinfo import summary
         model_summary = summary(model_cpu, input_size=input_shape, verbose=0)
         # Save or log the model_summary (e.g., write to a file)
-        with open(f'logs/{log_name}_model_summary.txt', 'w') as f:
+        with open(f'logs/{log_name}/model_summary.txt', 'w') as f:
             f.write(str(model_summary))
     except Exception as e:
         print(f"Failed to generate model summary: {e}")
