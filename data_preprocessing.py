@@ -188,6 +188,7 @@ def create_data_loaders(train_audio_files, train_labels, test_audio_files, test_
         train_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, train_audio_files, train_labels, split='train', wave_type=wave_type, feature_type=feature_type)
         test_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, test_audio_files, test_labels, split='test', wave_type=wave_type, feature_type=feature_type)
 
+    # val_ds, train_ds = random_split(train_ds, [0.2, 0.8], generator=generator)
     val_ds = test_ds
 
     # Create DataLoaders

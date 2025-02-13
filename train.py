@@ -49,7 +49,8 @@ def training(dt_loader, model:nn.Module, optimizer:torch.optim.Optimizer, criter
     for waveform, label in dt_loader:
         waveform, label = waveform.to(device), label.to(device)
         # One-hot encoding the label
-        label = torch.nn.functional.one_hot(label, num_classes=2).float()
+        # label = torch.nn.functional.one_hot(label, num_classes=2).float()
+        label = label.unsqueeze(-1).float()
         optimizer.zero_grad()
 
         if flatten:
@@ -78,7 +79,8 @@ def testing(dt_loader, model, criterion:nn.Module, flatten=False, device='cpu'):
         for waveform, label in dt_loader:
             waveform, label = waveform.to(device), label.to(device)
             # One-hot encoding the label
-            label = torch.nn.functional.one_hot(label, num_classes=2).float()
+            # label = torch.nn.functional.one_hot(label, num_classes=2).float()
+            label = label.unsqueeze(-1).float()
             if flatten:
                 waveform = waveform.view(waveform.size(0), -1)
             output = model(waveform)
@@ -103,8 +105,10 @@ def evaluate(model, test_loader, criterion, flatten=False, device='cpu', name_ex
             waveform, label = waveform.to(device), label.to(device)
             if flatten:
                 waveform = waveform.view(waveform.size(0), -1)
+
             output = model(waveform)
-            _, pred = torch.max(output, dim=1)
+            
+            pred = torch.round(output)
             y_true.extend(label.cpu().numpy())
             y_pred.extend(pred.cpu().numpy())
     
