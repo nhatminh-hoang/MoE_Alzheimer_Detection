@@ -5,7 +5,7 @@
 #SBATCH --ntasks=1
 
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:3
+#SBATCH --gres=gpu:1
 #SBATCH --output=train_outs/small/out/%x.%j.out
 #SBATCH --error=train_outs/small/errors/%x.%j.err
 #SBATCH --mail-type=ALL
