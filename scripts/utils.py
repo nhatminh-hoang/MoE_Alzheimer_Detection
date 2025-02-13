@@ -264,9 +264,20 @@ def save_evaluation_metrics(y_true, y_pred, log_name: str):
 
 def save_model_summary(model, input_shape: tuple, log_name: str):
     '''Save the model summary to a file'''
-    model_summary = summary(model, input_size=input_shape, verbose=0)
-    with open(f'{LOG_PATH + log_name}/model_summary.txt', 'w') as f:
-        f.write(str(model_summary))
+    # Save original device
+    orig_device = next(model.parameters()).device
+    # Move model to CPU for summary generation
+    model_cpu = model.to('cpu')
+    try:
+        from torchinfo import summary
+        model_summary = summary(model_cpu, input_size=input_shape, verbose=0)
+        # Save or log the model_summary (e.g., write to a file)
+        with open(f'logs/{log_name}_model_summary.txt', 'w') as f:
+            f.write(str(model_summary))
+    except Exception as e:
+        print(f"Failed to generate model summary: {e}")
+    # Move model back to its original device
+    model.to(orig_device)
 
 def save_lr_plot(lr_list, log_name: str):
     '''Save the learning rate plot to a file'''
