@@ -134,7 +134,7 @@ The `notebooks` directory contains Jupyter notebooks for data exploration and mo
 
 ## Logs
 
-Training logs, model summaries, evaluation metrics, and plots are saved in the `logs` directory. Each experiment has its own subdirectory, named according to the model, wave type, and feature type used (e.g., `ADReSS2020_MLP_full_mfcc`).
+Training logs, model summaries, evaluation metrics, and plots are saved in the `logs` directory. Each experiment has its own subdirectory, named according to the model, wave type, and feature type used (e.g., `ADReSS2020_CNN_full_mfcc_1000epochs_bs256_lr0.001_hs32_do0.25`).
 
 ## License
 
