@@ -73,13 +73,13 @@ class ADreSS2020Dataset(Dataset):
 
         if self.feature_type == 'mfcc':
             if self.split == 'train':
-                if os.path.exists(ADReSS2020_DATAPATH + '/preprocessed/' + 'X_train.npy') and os.path.exists(ADReSS2020_DATAPATH + '/preprocessed/' + 'y_train.npy'):
-                    self.preprocess = np.load(ADReSS2020_DATAPATH + '/preprocessed/' + 'X_train.npy'), np.load(ADReSS2020_DATAPATH + '/preprocessed/' + 'y_train.npy')
+                if os.path.exists(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_X_train.npy') and os.path.exists(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_y_train.npy'):
+                    self.preprocess = np.load(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_X_train.npy'), np.load(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_y_train.npy')
                 else:
                     self.preprocess = self._preprocess_mfcc(audio_files, labels)
             elif self.split == 'test':
-                if os.path.exists(ADReSS2020_DATAPATH + '/preprocessed/' + 'X_test.npy') and os.path.exists(ADReSS2020_DATAPATH + '/preprocessed/' + 'y_test.npy'):
-                    self.preprocess = np.load(ADReSS2020_DATAPATH + '/preprocessed/' + 'X_test.npy'), np.load(ADReSS2020_DATAPATH + '/preprocessed/' + 'y_test.npy')
+                if os.path.exists(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_X_test.npy') and os.path.exists(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_y_test.npy'):
+                    self.preprocess = np.load(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_X_test.npy'), np.load(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_y_test.npy')
                 else:
                     self.preprocess = self._preprocess_mfcc(audio_files, labels)
 
@@ -129,8 +129,8 @@ class ADreSS2020Dataset(Dataset):
             del features, segmented_data, segmented_labels
 
             # Save the preprocessed data
-            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'X_train.npy', X)
-            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'y_train.npy', y)
+            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_X_train.npy', X)
+            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_y_train.npy', y)
 
         elif self.split == 'test':
             segmented_test_data, segmented_test_labels = prepare_test_data(audio_files, labels)
@@ -145,8 +145,8 @@ class ADreSS2020Dataset(Dataset):
             del features_test, segmented_test_data, segmented_test_labels
 
             # Save the preprocessed data
-            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'X_test.npy', X)
-            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'y_test.npy', y)
+            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_X_test.npy', X)
+            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_y_test.npy', y)
 
         return X, y
 
@@ -204,7 +204,7 @@ if __name__ == "__main__":
     train_audio_files, train_labels, test_audio_files, test_labels = load_data()
     print("Load data successful!")
 
-    train_loader, val_loader, test_loader = create_data_loaders(train_audio_files, train_labels, test_audio_files, test_labels, feature_type='wave')
+    train_loader, val_loader, test_loader = create_data_loaders(train_audio_files, train_labels, test_audio_files, test_labels, feature_type='mfcc')
     print("DataLoaders created successfully!")
 
     print("Time taken: ", f'{time.time() - start:.2f} seconds')
