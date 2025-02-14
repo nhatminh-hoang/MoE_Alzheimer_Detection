@@ -150,7 +150,7 @@ class ADreSS2020Dataset(Dataset):
 
         return X, y
 
-def load_data(data_name='ADReSS2020'):
+def load_audio_data(data_name='ADReSS2020'):
     """Loads data from a CSV file.
 
     Args:
@@ -201,7 +201,7 @@ def create_data_loaders(train_audio_files, train_labels, test_audio_files, test_
 if __name__ == "__main__":
     start = time.time()
 
-    train_audio_files, train_labels, test_audio_files, test_labels = load_data()
+    train_audio_files, train_labels, test_audio_files, test_labels = load_audio_data()
     print("Load data successful!")
 
     train_loader, val_loader, test_loader = create_data_loaders(train_audio_files, train_labels, test_audio_files, test_labels, feature_type='mfcc')
