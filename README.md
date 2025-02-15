@@ -110,7 +110,7 @@ This command trains an MLP model using MFCC features extracted from the full aud
 
 The `train.py` script uses the following key components:
 
-* MODEL dictionary: Maps model names (e.g., MLP, CNN) to their corresponding classes defined in base_model.py.
+* MODEL dictionary: Maps model names (e.g., MLP, CNN) to their corresponding classes defined in [base_model.py](https://github.com/nhatminh-hoang/MoE_Alzheimer_Detection/blob/main/models/base_model.py).
 * `training()` function: Performs one epoch of training.
 * `testing()` function: Evaluates the model on the validation or test set.
 * `fit()` function: Orchestrates the training loop, including forward and backward passes, optimization, and early stopping.
@@ -119,25 +119,6 @@ The `train.py` script uses the following key components:
 * `save_training_images()` function: Saves plots of the training and validation loss and accuracy curves to the logs directory.
 * `save_lr_plot()` function: Saves a plot of the learning rate schedule to the logs directory.
 
-## Evaluation
-
-To evaluate a trained model on the test set, run the `evaluate.py` script:
-
-```sh
-python evaluate.py
-```
-
-This script loads the trained model specified in the configuration file and evaluates its performance on the test dataset. It calculates and saves evaluation metrics such as accuracy, precision, recall, and F1-score to the logs directory.
-
-## Prediction
-
-To make predictions on new audio data using a trained model, run the `predict.py` script:
-
-```sh
-python predict.py
-```
-
-This script loads a trained model and uses it to classify new audio samples.
 
 ## Notebooks
 

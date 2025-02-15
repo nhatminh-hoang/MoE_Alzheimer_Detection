@@ -63,34 +63,46 @@ class ADreSS2020Dataset(Dataset):
         (Waveform, Sample rate) of the audio file
         Label of the audio file
     '''
-    def __init__(self, data_path, audio_files, labels, split, wave_type='full', feature_type='mfcc'):
+    def __init__(self, data_path, data_type, split, wave_type='full', feature_type='mfcc'):
         self.data_path = data_path
-        self.audio_files = audio_files
-        self.labels = labels
         self.split = split
         self.wave_type = wave_type
         self.feature_type = feature_type
 
+        # Load data
+        if data_type == 'audio':
+            self.audio_files, self.labels = self._load_audio_data()
+
+        # Preprocess data
         if self.feature_type == 'mfcc':
-            if self.split == 'train':
-                if os.path.exists(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_X_train.npy') and os.path.exists(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_y_train.npy'):
-                    self.preprocess = np.load(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_X_train.npy'), np.load(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_y_train.npy')
-                else:
-                    self.preprocess = self._preprocess_mfcc(audio_files, labels)
-            elif self.split == 'test':
-                if os.path.exists(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_X_test.npy') and os.path.exists(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_y_test.npy'):
-                    self.preprocess = np.load(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_X_test.npy'), np.load(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_y_test.npy')
-                else:
-                    self.preprocess = self._preprocess_mfcc(audio_files, labels)
+            preprocess_path = ADReSS2020_DATAPATH + '/preprocessed/'
+            X_name = f'mfcc_X_{self.split}.npy'
+            y_name = f'mfcc_y_{self.split}.npy'
+            
+            if os.path.exists(preprocess_path + X_name) and os.path.exists(preprocess_path + y_name):
+                self.preprocess = np.load(preprocess_path + X_name), np.load(preprocess_path + y_name)
+            else:
+                self.preprocess = self._preprocess_mfcc(self.audio_files, self.labels)
 
         else:
-            self.preprocess = prepare_test_data(audio_files, labels)
+            self.preprocess = prepare_test_data(self.audio_files, self.labels)
 
     def __len__(self):
         return len(self.preprocess[0])
     
     def __getitem__(self, idx):
         return np.expand_dims(self.preprocess[0][idx], -1).astype(np.float32), self.preprocess[1][idx]
+    
+    def _load_audio_data(self):
+        train_audio_files, train_labels, test_audio_files, test_labels = load_audio_data(data_name='ADReSS2020')
+        if self.split == 'train':
+            audio_files = train_audio_files
+            labels = train_labels
+        elif self.split == 'test':
+            audio_files = test_audio_files
+            labels = test_labels
+
+        return audio_files, labels
     
     def _preprocess_mfcc(self, audio_files, labels):
         custom_window_size = 1024
