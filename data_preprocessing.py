@@ -179,7 +179,7 @@ def load_audio_data(data_name='ADReSS2020'):
     
     assert len(train_audio_files) == len(train_labels) and len(test_audio_files) == len(test_labels), "Data and labels do not match!"
     assert len(train_audio_files) > 0 and len(test_audio_files) > 0, "No data loaded!"
-    
+
     print("Load data successful!")
     return train_audio_files, train_labels, test_audio_files, test_labels
 
@@ -230,9 +230,11 @@ def create_dataloader(data_name, data_type, batch_size=32, feature_type='mfcc', 
     """
     # Load data
 
-    train_loader, val_loader, test_loader = create_audio_data_loaders(\
-                                                                        data_name=data_name,
-                                                                        feature_type=feature_type, batch_size=batch_size, wave_type=wave_type)
+    train_loader, val_loader, test_loader = create_audio_data_loaders(data_type=data_type,
+                                                                      data_name=data_name,
+                                                                      feature_type=feature_type, 
+                                                                      batch_size=batch_size, 
+                                                                      wave_type=wave_type)
     print("DataLoaders created successfully!")
 
     return train_loader, val_loader, test_loader
