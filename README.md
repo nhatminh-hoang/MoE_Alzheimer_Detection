@@ -70,7 +70,7 @@ This repository contains code for the ADReSS2020 audio classification project. T
 ## Data
 The ADReSS2020 dataset is a part of ADReSS2 Challenge which can be access in the challenge's website: [Challenge's Link](https://luzs.gitlab.io/adress/)
 
-After that, create the ```data``` directory and extract the dataset as shown in the ## Project Structure
+After that, create the ```data``` directory and extract the dataset as shown in the [Project Structure](https://github.com/nhatminh-hoang/MoE_Alzheimer_Detection/blob/main/README.md#project-structure)
 
 ## Configuration
 
