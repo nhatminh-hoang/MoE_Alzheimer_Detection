@@ -78,7 +78,7 @@ class ADreSS2020Dataset(Dataset):
             preprocess_path = ADReSS2020_DATAPATH + '/preprocessed/'
             X_name = f'mfcc_X_{self.split}.npy'
             y_name = f'mfcc_y_{self.split}.npy'
-            
+
             if os.path.exists(preprocess_path + X_name) and os.path.exists(preprocess_path + y_name):
                 self.preprocess = np.load(preprocess_path + X_name), np.load(preprocess_path + y_name)
             else:
@@ -176,11 +176,17 @@ def load_audio_data(data_name='ADReSS2020'):
         # Load train and test data
         train_audio_files, train_labels = get_audio_files_and_labels(ADReSS2020_DATAPATH, ADReSS2020_TRAINPATH, split='train')
         test_audio_files, test_labels = get_audio_files_and_labels(ADReSS2020_DATAPATH, ADReSS2020_TESTPATH, split='test')
-
+    
+    assert len(train_audio_files) == len(train_labels) and len(test_audio_files) == len(test_labels), "Data and labels do not match!"
+    assert len(train_audio_files) > 0 and len(test_audio_files) > 0, "No data loaded!"
+    
+    print("Load data successful!")
     return train_audio_files, train_labels, test_audio_files, test_labels
 
-def create_audio_data_loaders(train_audio_files, train_labels, test_audio_files, test_labels, 
-                        wave_type='full', feature_type='mfcc', batch_size=32, data_name='ADReSS2020'):
+def create_audio_data_loaders(data_type='audio', 
+                              data_name='ADReSS2020',
+                              wave_type='full', feature_type='mfcc',
+                              batch_size=32):
     """Creates PyTorch DataLoaders for training and testing sets.
 
     Args:
@@ -197,8 +203,8 @@ def create_audio_data_loaders(train_audio_files, train_labels, test_audio_files,
 
     # Create Datasets
     if data_name == 'ADReSS2020':
-        train_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, train_audio_files, train_labels, split='train', wave_type=wave_type, feature_type=feature_type)
-        test_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, test_audio_files, test_labels, split='test', wave_type=wave_type, feature_type=feature_type)
+        train_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, data_type=data_type, split='train', wave_type=wave_type, feature_type=feature_type)
+        test_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, data_type=data_type, split='test', wave_type=wave_type, feature_type=feature_type)
 
     # val_ds, train_ds = random_split(train_ds, [0.2, 0.8], generator=generator)
     val_ds = test_ds
@@ -223,14 +229,11 @@ def create_dataloader(data_name, data_type, batch_size=32, feature_type='mfcc', 
         torch.utils.data.DataLoader: DataLoader for the specified dataset.
     """
     # Load data
-    if data_type == 'audio':
-        train_audio_files, train_labels, test_audio_files, test_labels = load_audio_data(data_name)
-        print("Load data successful!")
 
-        train_loader, val_loader, test_loader = create_audio_data_loaders(train_audio_files, train_labels, test_audio_files, test_labels, \
-                                                                          data_name=data_name,
-                                                                          feature_type=feature_type, batch_size=batch_size, wave_type=wave_type)
-        print("DataLoaders created successfully!")
+    train_loader, val_loader, test_loader = create_audio_data_loaders(\
+                                                                        data_name=data_name,
+                                                                        feature_type=feature_type, batch_size=batch_size, wave_type=wave_type)
+    print("DataLoaders created successfully!")
 
     return train_loader, val_loader, test_loader
 
