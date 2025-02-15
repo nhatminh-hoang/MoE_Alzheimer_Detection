@@ -167,7 +167,7 @@ def load_audio_data(data_name='ADReSS2020'):
 
     return train_audio_files, train_labels, test_audio_files, test_labels
 
-def create_data_loaders(train_audio_files, train_labels, test_audio_files, test_labels, 
+def create_audio_data_loaders(train_audio_files, train_labels, test_audio_files, test_labels, 
                         wave_type='full', feature_type='mfcc', batch_size=32, data_name='ADReSS2020'):
     """Creates PyTorch DataLoaders for training and testing sets.
 
@@ -198,14 +198,34 @@ def create_data_loaders(train_audio_files, train_labels, test_audio_files, test_
 
     return train_loader, val_loader, test_loader
 
+def create_dataloader(data_name, data_type, batch_size=32, feature_type='mfcc', wave_type='full'):
+    """Creates PyTorch DataLoader for the specified dataset.
+
+    Args:
+        data_name (str): Name of the dataset to load.
+        data_type (str): Type of data to load (e.g., 'train', 'test').
+        batch_size (int): Batch size for the DataLoader.
+        mfcc (bool): Whether to use MFCC features.
+
+    Returns:
+        torch.utils.data.DataLoader: DataLoader for the specified dataset.
+    """
+    # Load data
+    if data_type == 'audio':
+        train_audio_files, train_labels, test_audio_files, test_labels = load_audio_data(data_name)
+        print("Load data successful!")
+
+        train_loader, val_loader, test_loader = create_audio_data_loaders(train_audio_files, train_labels, test_audio_files, test_labels, \
+                                                                          data_name=data_name,
+                                                                          feature_type=feature_type, batch_size=batch_size, wave_type=wave_type)
+        print("DataLoaders created successfully!")
+
+    return train_loader, val_loader, test_loader
+
 if __name__ == "__main__":
     start = time.time()
 
-    train_audio_files, train_labels, test_audio_files, test_labels = load_audio_data()
-    print("Load data successful!")
-
-    train_loader, val_loader, test_loader = create_data_loaders(train_audio_files, train_labels, test_audio_files, test_labels, feature_type='mfcc')
-    print("DataLoaders created successfully!")
+    train_loader, val_loader, test_loader = create_dataloader('ADReSS2020', 'audio', batch_size=32, feature_type='mfcc')
 
     print("Time taken: ", f'{time.time() - start:.2f} seconds')
     start = time.time()

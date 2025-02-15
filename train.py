@@ -187,6 +187,7 @@ def main():
     # Getting arguments to create the new config 
     parser = argparse.ArgumentParser(description='Train a model')
     parser.add_argument('--data_name', type=str, help='Name of the dataset', default='ADReSS2020')
+    parser.add_argument('--data_type', type=str, help='Type of data', default='audio')
     parser.add_argument('--wave_type', type=str, help='Type of waveform', default='full')
     parser.add_argument('--feature_type', type=str, help='Use features {MFCC, LogmelDelta}', default='None')
 
@@ -230,12 +231,11 @@ def main():
     
     print(config)
     # Load data
-    train_audio_files, train_labels, test_audio_files, test_labels = load_data()
-    train_loader, val_loader, test_loader = create_data_loaders(train_audio_files, train_labels, test_audio_files, test_labels,
-                                                                wave_type=config['wave_type'], 
-                                                                feature_type=feature_type,
-                                                                batch_size=config['batch_size'],
-                                                                data_name=config['data_name'])
+    train_loader, val_loader, test_loader = create_dataloader(data_type=config['data_type'],
+                                                              feature_type=feature_type,
+                                                              batch_size=config['batch_size'],
+                                                              data_name=config['data_name'],
+                                                              wave_type=config['wave_type'])
     input_shape = next(iter(train_loader))[0].shape
     if config['flatten']:
         input_size = input_shape[1]
