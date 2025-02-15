@@ -103,7 +103,7 @@ This script loads the dataset, extracts audio features (MFCC, Log-Mel spectrogra
 To train a model, run the `train.py` script with the desired configuration. You can specify the training parameters using command-line arguments. For example:
 
 ```sh
-python train.py --data_name ADReSS2020 --wave_type full --feature_type Transformer --model MLP --epochs 100 --batch_size 128 --lr 0.001 --hidden_size 128 --dropout 0.5 --early_stop 10
+python train.py --data_name ADReSS2020 --wave_type full --feature_type MFCC --model CNN --epochs 1000 --batch_size 256 --lr 1e-3 --hidden_size 128 --dropout 0.5 --early_stop no
 ```
 
 This command trains an MLP model using MFCC features extracted from the full audio waveforms. The training will run for 100 epochs with a batch size of 128 and a learning rate of 0.001. Early stopping is enabled, and training will halt if the validation loss doesn't improve for 10 epochs. The script saves the best model weights based on validation loss to the `saved_models` directory and logs training progress to the `logs` directory.
