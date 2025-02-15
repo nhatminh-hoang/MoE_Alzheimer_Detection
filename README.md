@@ -48,7 +48,12 @@ This repository contains code for the ADReSS2020 audio classification project. T
 ```
 
 ## Setup
-
+0. Setup the Anaconda environment:
+    ```sh
+    conda create -n <name_env> python=3.11 -y
+    conda activate <name_env>
+    ```
+    
 1. Clone the repository:
 
     ```sh
