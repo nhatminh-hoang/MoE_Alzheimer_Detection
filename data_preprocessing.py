@@ -1,8 +1,11 @@
 import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 import time
 from tqdm import tqdm
 
 import tiktoken
+from transformers import AutoTokenizer, AutoModelForMaskedLM, ModernBertModel
 import pandas as pd
 import torchaudio 
 
@@ -71,18 +74,28 @@ class ADreSS2020Dataset(Dataset):
         self.wave_type = wave_type
         self.feature_type = feature_type
 
+        preprocess_path = ADReSS2020_DATAPATH + '/preprocessed/'
+        X_name = f'X_{self.split}.npy'
+        y_name = f'y_{self.split}.npy'
+
         # Load data
         if data_type == 'audio':
             self.audio_files, self.labels = self._load_audio_data()
 
         if data_type == 'text':
+            X_name = 'text_' + X_name
+            y_name = 'text_' + y_name
+
             self.text_data = self._load_text_data()
+            if os.path.exists(preprocess_path + X_name) and os.path.exists(preprocess_path + y_name):
+                self.preprocess_text = np.load(preprocess_path + X_name), np.load(preprocess_path + y_name)
+            else:
+                self.preprocess_text = self._preprocess_text_data()
 
         # Preprocess data
         if data_type == 'audio' and self.feature_type == 'mfcc':
-            preprocess_path = ADReSS2020_DATAPATH + '/preprocessed/'
-            X_name = f'mfcc_X_{self.split}.npy'
-            y_name = f'mfcc_y_{self.split}.npy'
+            X_name = 'mfcc_' + X_name
+            y_name = 'mfcc_' + y_name
 
             if os.path.exists(preprocess_path + X_name) and os.path.exists(preprocess_path + y_name):
                 self.preprocess_audio = np.load(preprocess_path + X_name), np.load(preprocess_path + y_name)
@@ -90,10 +103,7 @@ class ADreSS2020Dataset(Dataset):
                 self.preprocess_audio = self._preprocess_mfcc(self.audio_files, self.labels)
 
         elif data_type == 'audio':
-            self.preprocess_audio = prepare_test_data(self.audio_files, self.labels)
-
-        elif data_type == 'text':
-            self.text_data = self._preprocess_text()
+            self.preprocess_audio = prepare_test_data(self.audio_files, self.labels)            
 
     def __len__(self):
         if self.data_type == 'audio':
@@ -103,11 +113,11 @@ class ADreSS2020Dataset(Dataset):
     
     def __getitem__(self, idx):
         if self.data_type == 'audio':
-            return np.expand_dims(self.preprocess_audio[0][idx], -1).astype(np.float32), self.preprocess_audio[1][idx]
+            return  np.expand_dims(self.preprocess_audio[0][idx], -1).astype(np.float32), \
+                    self.preprocess_audio[1][idx]
         
         elif self.data_type == 'text':
-            return torch.tensor(self.text_data['encoded'][idx], dtype=torch.long), \
-                   torch.tensor(self.text_data['label'][idx], dtype=torch.long)
+            return self.preprocess_text[0][idx], self.preprocess_text[1][idx]
     
     def _load_audio_data(self):
         train_audio_files, train_labels, test_audio_files, test_labels = load_audio_data(data_name='ADReSS2020')
@@ -181,15 +191,37 @@ class ADreSS2020Dataset(Dataset):
 
         return X, y
     
-    def _preprocess_text(self):
-        enc = tiktoken.get_encoding('gpt2') # Have 50257 tokens
-        enc._special_tokens.update({'<|pad|>': 50257})
-        self.text_data['encoded'] = self.text_data['tokens'].apply(lambda x: enc.encode(" ".join(x),
-                                                                                      allowed_special={'<|pad|>'}))
-        self.text_data['encoded']  = self.text_data['encoded'].apply(split_tokens)
-        self.text_data = self.text_data.explode('encoded').reset_index(drop=True)
+    def _preprocess_text_data(self):
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        model_id = "answerdotai/ModernBERT-base"
+        tokenizer = AutoTokenizer.from_pretrained(model_id)
+        bert_model = ModernBertModel.from_pretrained(model_id).to(device)
+        bert_model.eval()
         
-        return self.text_data
+        preprocessed_text_data = []
+        
+        for idx in range(len(self.text_data)):
+            inputs = " ".join(self.text_data.iloc[idx]['tokens'])
+            inputs_token = tokenizer(inputs, 
+                                     return_tensors='pt',
+                                     truncation=True, 
+                                     padding='max_length', 
+                                     max_length=300).to(device)
+            outputs = bert_model(**inputs_token).last_hidden_state.squeeze(0).cpu().detach().numpy()
+            preprocessed_text_data.append(outputs)
+        print(len(preprocessed_text_data))
+        X = np.array(preprocessed_text_data)
+        y = self.text_data['label'].to_numpy()
+        
+        # Save the preprocessed data
+        if self.split == 'train':
+            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'text_X_train.npy', X)
+            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'text_y_train.npy', y)
+        elif self.split == 'test':
+            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'text_X_test.npy', X)
+            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'text_y_test.npy', y)
+
+        return preprocessed_text_data
 
 def load_audio_data(data_name='ADReSS2020'):
     """Loads data from a CSV file.

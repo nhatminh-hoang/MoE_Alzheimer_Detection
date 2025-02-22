@@ -115,14 +115,14 @@ def evaluate(model, test_loader, criterion, flatten=False, device='cpu', name_ex
     save_evaluation_metrics(y_true, y_pred, name_ex)
 
 def fit(name_ex, train_loader, val_loader, model, epochs, optimizer, criterion, learning_rate,
-        input_shape, flatten, device='cpu', early_stop=5, USE_COMPILE=False):
+        input_dummy, flatten, device='cpu', early_stop=5, USE_COMPILE=False):
     train_losses, train_accs = [], []
     val_losses, val_accs = [], []
     lr_list = []
     best_val_loss = float('inf')
     early_stop_counter = 0
     create_training_log(name_ex)
-    save_model_summary(model, input_shape=input_shape, log_name=name_ex)
+    save_model_summary(model, input_data=input_dummy, log_name=name_ex)
     model = model.to(device)
 
     if USE_COMPILE:
@@ -172,6 +172,7 @@ def fit(name_ex, train_loader, val_loader, model, epochs, optimizer, criterion, 
 def main():
     # Device configuration
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print("Using device: ", device)
     if device.type == 'cuda':
         # Check CUDA capability
         if not torch.cuda.is_bf16_supported():
@@ -239,7 +240,8 @@ def main():
                                                               batch_size=config['batch_size'],
                                                               data_name=config['data_name'],
                                                               wave_type=config['wave_type'])
-    input_shape = next(iter(train_loader))[0].shape
+    input_dummy = next(iter(train_loader))[0]
+    input_shape = input_dummy.shape
     if config['flatten']:
         input_size = input_shape[1]
     else: 
@@ -251,15 +253,17 @@ def main():
     
     # Load model
     model = MODEL[config['model']](input_size=input_size, hidden_size=config['hidden_size'], output_size=config['output_size'], drop_out=config['dropout'])
-    model.to(device)
-
+    
     # Optimizer and criterion
     optimizer = optim.AdamW(model.parameters(), lr=config['lr'], weight_decay=1e-3)
     criterion = nn.BCELoss()
 
-    # # Train model
+    # Checking the input_shape to the model
+    # model_summary = summary(model, input_data=input_dummy, device='cpu')
+
+    # Train model
     fit(name_ex, train_loader, val_loader, model, config['epochs'], optimizer, criterion, 
-        config['lr'], input_shape, flatten=config['flatten'], device=device, early_stop=config['early_stop'],
+        config['lr'], input_dummy, flatten=config['flatten'], device=device, early_stop=config['early_stop'],
         USE_COMPILE=USE_COMPILE)
 
     # Test model

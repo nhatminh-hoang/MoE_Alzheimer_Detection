@@ -174,6 +174,7 @@ class MultiHeadAttention(nn.Module):
         self.v = nn.Linear(input_size, hidden_size)
 
         self.out = nn.Linear(hidden_size, output_size)
+        self.dropout_p = drop_out
         self.dropout = nn.Dropout(drop_out)
         self.norm = nn.LayerNorm(output_size)
 
@@ -206,13 +207,13 @@ class MultiHeadAttention(nn.Module):
         # scores = F.softmax(scores, dim=-1)
         # scores = self.dropout(scores)
         # output = torch.matmul(scores, v)
-        output = scaled_dot_product_attention(q, k, v)
+        output = scaled_dot_product_attention(q, k, v, dropout_p=self.dropout_p)
 
         # Merge
         output = output.transpose(1, 2).contiguous().view(x.size(0), -1, self.hidden_size) # Shape batch_size, seq_len, hidden_size
 
         # Apply the output layer
-        output = self.out(output)
+        output = self.dropout(self.out(output))
         output = self.norm(output + res)
         return output
     
@@ -234,9 +235,9 @@ class FFN(nn.Module):
         res = x
         x = self.fc1(x)
         x = self.relu(x)
-        x = self.dropout(x)
         x = self.fc2(x)
         x = self.relu(x)
+        x = self.dropout(x)
         x = self.norm(x + res)
         return x
     
@@ -251,22 +252,4 @@ class TransformerBlock(nn.Module):
     def forward(self, x):
         x = self.mha(x)
         x = self.ffn(x)
-        return x
-    
-class TransformerModel(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, drop_out, seq_length=300, n_heads=4, n_layers=4):
-        super(TransformerModel, self).__init__()
-        self.embed = nn.Embedding(50304, hidden_size)
-        self.positional_encoding = nn.Embedding(seq_length, hidden_size)
-        self.layers = nn.ModuleList([TransformerBlock(hidden_size, hidden_size, hidden_size, drop_out, n_heads) 
-                                     for _ in range(n_layers)])
-        self.fc = nn.Linear(hidden_size, 1)
-
-    def forward(self, x):
-        emb = self.embed(x)
-        ps_emb = self.positional_encoding(torch.arange(emb.size(1), device=x.device))
-        x = emb + ps_emb
-        for l in self.layers:
-            x = l(x)
-        x = nn.Sigmoid()(self.fc(x[:, -1, :]))
         return x

@@ -270,22 +270,13 @@ def save_evaluation_metrics(y_true, y_pred, log_name: str):
     with open(f'{LOG_PATH + log_name}/classification_report.txt', 'w') as f:
         f.write(report)
 
-def save_model_summary(model, input_shape: tuple, log_name: str):
+def save_model_summary(model, input_data: tuple, log_name: str):
     '''Save the model summary to a file'''
-    # Save original device
-    orig_device = next(model.parameters()).device
-    # Move model to CPU for summary generation
-    model_cpu = model.to('cpu')
-    try:
-        from torchinfo import summary
-        model_summary = summary(model_cpu, input_size=input_shape, verbose=0)
-        # Save or log the model_summary (e.g., write to a file)
-        with open(f'logs/{log_name}/model_summary.txt', 'w') as f:
-            f.write(str(model_summary))
-    except Exception as e:
-        print(f"Failed to generate model summary: {e}")
-    # Move model back to its original device
-    model.to(orig_device)
+    # print(input_shape)
+    model_summary = summary(model, input_data=input_data, device='cpu')
+    # Save or log the model_summary (e.g., write to a file)
+    with open(f'logs/{log_name}/model_summary.txt', 'w') as f:
+        f.write(str(model_summary))
 
 def save_lr_plot(lr_list, log_name: str):
     '''Save the learning rate plot to a file'''
@@ -456,8 +447,8 @@ def get_chat_data(split):
 
 def split_tokens(tokens, max_len=300):
     if len(tokens) <= max_len:
-        return [tokens + [50257] * (max_len - len(tokens))]
+        return [tokens + [1] * (max_len - len(tokens))]
     else:
         split = [tokens[i:i+max_len] for i in range(0, len(tokens), max_len)]
-        split[-1] += [50257] * (max_len - len(split[-1]))
+        split[-1] += [1] * (max_len - len(split[-1]))
         return split
