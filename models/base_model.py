@@ -20,7 +20,7 @@ class MLPModel(nn.Module):
         super(MLPModel, self).__init__()
         self.fc1 = nn.Linear(input_size, hidden_size)
         self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_size, output_size)
+        self.fc2 = nn.Linear(hidden_size, 1)
         self.dropout = nn.Dropout(drop_out)
         self.norm = nn.BatchNorm1d(hidden_size)
 
@@ -254,15 +254,18 @@ class TransformerBlock(nn.Module):
         return x
     
 class TransformerModel(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, drop_out, n_heads=4, n_layers=4):
+    def __init__(self, input_size, hidden_size, output_size, drop_out, seq_length=300, n_heads=4, n_layers=4):
         super(TransformerModel, self).__init__()
-        self.embed = nn.Linear(input_size, hidden_size)
+        self.embed = nn.Embedding(50304, hidden_size)
+        self.positional_encoding = nn.Embedding(seq_length, hidden_size)
         self.layers = nn.ModuleList([TransformerBlock(hidden_size, hidden_size, hidden_size, drop_out, n_heads) 
                                      for _ in range(n_layers)])
         self.fc = nn.Linear(hidden_size, 1)
 
     def forward(self, x):
-        x = self.embed(x)
+        emb = self.embed(x)
+        ps_emb = self.positional_encoding(torch.arange(emb.size(1), device=x.device))
+        x = emb + ps_emb
         for l in self.layers:
             x = l(x)
         x = nn.Sigmoid()(self.fc(x[:, -1, :]))

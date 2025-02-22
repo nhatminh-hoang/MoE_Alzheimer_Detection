@@ -1,4 +1,5 @@
 import os
+import re
 import yaml
 from tqdm import tqdm
 
@@ -7,9 +8,12 @@ import numpy as np
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import seaborn as sns
+import pandas as pd
 
 import torchaudio
 import librosa
+
+import pylangacq
 
 from torchinfo import summary
 
@@ -22,15 +26,19 @@ LOG_PATH = "./logs/"
 SAVED_PATH = "./models/saved_models/"
 
 ADReSS2020_DATAPATH = "./data/ADReSS-IS2020-data"
-ADReSS2020_TRAIN_PATH = ADReSS2020_DATAPATH + "/train"
-ADReSS2020_TEST_PATH = ADReSS2020_DATAPATH + "/test"
+ADReSS2020_TRAINPATH = ADReSS2020_DATAPATH + "/train"
+ADReSS2020_TESTPATH = ADReSS2020_DATAPATH + "/test"
 
 ADReSS2020_FULLWAVE = "/Full_wave_enhanced_audio"
 ADReSS2020_CHUNKSWAVE = "/Normalised_audio-chunks"
 ADReSS2020_TRANSCRIPTION = "/transcription"
+TRANSCRIPT_NAME = "transcription"
 
 AD_data_txt = "/cd_meta_data.txt"
 NAD_data_txt = "/cc_meta_data.txt"
+
+import string
+punctuations = string.punctuation
 
 def create_config(config_path, config):
     with open(config_path, 'w') as f:
@@ -78,7 +86,7 @@ def plot_specgram(waveform, sample_rate, title="Spectrogram"):
 # Plot the distribution of time per audio file
 def plot_time_distribution(df, split='train'):
   for label in [0, 1]:
-      dic_path = ADReSS2020_TRAIN_PATH if split == 'train' else ADReSS2020_TEST_PATH
+      dic_path = ADReSS2020_TRAINPATH if split == 'train' else ADReSS2020_TESTPATH
       label_df = df[df['Label '] == label]
       time_list = []
       for idx, row in label_df.iterrows():
@@ -186,7 +194,7 @@ def prepare_test_data(test_audio_files, test_labels):
 
 def plot_time_distribution(df, split='train'):
   for label in [0, 1]:
-      dic_path = ADReSS2020_TRAIN_PATH if split == 'train' else ADReSS2020_TEST_PATH
+      dic_path = ADReSS2020_TRAINPATH if split == 'train' else ADReSS2020_TESTPATH
       label_df = df[df['Label '] == label]
       time_list = []
       for idx, row in label_df.iterrows():
@@ -287,3 +295,169 @@ def save_lr_plot(lr_list, log_name: str):
     plt.ylabel('Learning Rate')
     plt.title('Learning Rate Schedule')
     plt.savefig(f'{LOG_PATH + log_name}/learning_rate.png')
+
+def read_par_utterances(file_path):
+    """
+    Read a CHAT file and return a list of merged *PAR (and *INV) utterances.
+    This function merges continuation lines and removes trailing time codes.
+    """
+    utterances = []
+    current_utterance = None
+
+    with open(file_path, 'r', encoding="utf-8") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            # New utterance: lines starting with *PAR: or *INV:
+            if line.startswith("*PAR:") or line.startswith("*INV:"):
+                # If an utterance is in progress, finish and store it.
+                if current_utterance is not None:
+                    # Remove any trailing time code (text between two  symbols)
+                    current_utterance = re.sub(r'.*?', '', current_utterance).strip()
+                    utterances.append(current_utterance)
+                # Start a new utterance (remove the marker)
+                if line.startswith("*PAR:"):
+                    current_utterance = line[len("*PAR:"):].strip()
+                else:
+                    current_utterance = line[len("*INV:"):].strip()
+            # Continuation lines (indented or containing a time code marker) are appended.
+            elif current_utterance is not None and ('' in line):
+                current_utterance += " " + line.strip()
+            # Otherwise, ignore the line.
+    
+    # Append the final utterance if one is in progress.
+    if current_utterance:
+        current_utterance = re.sub(r'.*?', '', current_utterance).strip()
+        utterances.append(current_utterance)
+    
+    return utterances
+
+def is_retracing(token):
+    """
+    Determine if a token is a retracing token that should be merged with the previous token.
+    
+    Returns True for tokens matching patterns like:
+      - o(f)
+      - fallin(g)
+      - an(d)
+      - stealin(g)
+    (case-insensitive)
+    
+    But returns False for tokens such as (.), (..), or (...).
+    """
+    pattern = re.compile(r'^(an|o|stealin|takin)\([^)]*\)$', re.IGNORECASE)
+    if pattern.match(token):
+        return True
+    return False
+
+def merge_annotation_tokens(tokens, start_index):
+    """
+    Merge tokens that are part of an annotation enclosed in brackets.
+    This function supports both square-bracket annotations (e.g., "[+ exc]") and
+    angle-bracket annotations (e.g., "<walk with a>").
+    
+    Returns a tuple of (merged_token, next_index).
+    """
+    token = tokens[start_index]
+    if token.startswith('['):
+        closing = ']'
+    elif token.startswith('<'):
+        closing = '>'
+    else:
+        return token, start_index + 1
+
+    merged = token
+    i = start_index
+    # If the token already ends with the closing bracket, return it.
+    if merged.endswith(closing):
+        return merged, i + 1
+    i += 1
+    # Merge subsequent tokens until we find one that ends with the closing bracket.
+    while i < len(tokens) and not tokens[i].endswith(closing):
+        merged += " " + tokens[i]
+        i += 1
+    if i < len(tokens):
+        merged += " " + tokens[i]
+        i += 1
+    return merged, i
+
+def tokenize_and_merge(utterance):
+    """
+    Tokenize an utterance into tokens with the following custom behavior:
+    
+      - If a token is immediately followed by a retracing token 
+        (e.g., 'o(f)', 'fallin(g)', 'an(d)', 'stealin(g)'), merge them into a single token 
+        by concatenating with the linking_token.
+      - Merge bracketed annotations so that tokens like "[+ exc]" or "[: overflowing]" 
+        and angle-bracket annotations like "<walk with a>" remain intact.
+    
+    Returns a list of tokens.
+    """
+    tokens = utterance.split()
+    merged_tokens = []
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        
+        # If the token begins with '[' or '<' but does not end with the corresponding closing bracket,
+        # merge the entire annotation.
+        if (token.startswith('[') and not token.endswith(']')) or (token.startswith('<') and not token.endswith('>')):
+            merged_token, i = merge_annotation_tokens(tokens, i)
+            merged_tokens.append(merged_token)
+            continue
+        
+        merged_tokens.append(token)
+        i += 1
+        
+    return merged_tokens
+
+def get_chat_data(split):
+    """
+    Get the CHAT data from the ADReSS-IS2020 dataset.
+    
+    Parameters:
+        split (str): The split to load (either "train" or "test").
+        data_path (str): The path to the ADReSS-IS2020 dataset.
+    
+    Returns:
+        DataFrame: A DataFrame containing the CHAT data and labels.
+    """
+    path = ADReSS2020_TRAINPATH if split == "train" else ADReSS2020_TESTPATH
+    # Define the path to the transcript files.
+    transcript_path = os.path.join(path, TRANSCRIPT_NAME)
+    # Read the CHAT data.
+    reader = pylangacq.read_chat(transcript_path)
+
+    file_paths = reader.file_paths()
+    data = []
+
+    test_df = pd.read_csv(ADReSS2020_DATAPATH + '/2020Labels.txt', delimiter=';', skipinitialspace=True)
+    test_df = test_df.drop(columns=['age', 'mmse', 'gender'], axis=1)
+
+    # Read and merge utterances from each file.
+    for file_path in file_paths:
+        # Read and merge *PAR utterances.
+        utterances = read_par_utterances(file_path)
+
+        # Tokenize and merge tokens from each utterance.
+        all_tokens = []
+        for utt in utterances:
+            tokens = tokenize_and_merge(utt)
+            all_tokens.extend([token for token in tokens if token not in list(punctuations)])
+
+        if split == 'test':
+            label = test_df[test_df['ID'] == os.path.basename(file_path).split('.')[0] + ' '].Label.iloc[0]
+        
+        elif split == 'train':
+            label = 0 if 'cc' in file_path else 1
+
+        data.append((all_tokens, label))
+
+    return pd.DataFrame(data, columns=['tokens', 'label'])
+
+def split_tokens(tokens, max_len=300):
+    if len(tokens) <= max_len:
+        return [tokens + [50257] * (max_len - len(tokens))]
+    else:
+        split = [tokens[i:i+max_len] for i in range(0, len(tokens), max_len)]
+        split[-1] += [50257] * (max_len - len(split[-1]))
+        return split

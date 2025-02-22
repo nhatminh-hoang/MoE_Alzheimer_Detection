@@ -2,6 +2,7 @@ import os
 import time
 from tqdm import tqdm
 
+import tiktoken
 import pandas as pd
 import torchaudio 
 
@@ -65,6 +66,7 @@ class ADreSS2020Dataset(Dataset):
     '''
     def __init__(self, data_path, data_type, split, wave_type='full', feature_type='mfcc'):
         self.data_path = data_path
+        self.data_type = data_type
         self.split = split
         self.wave_type = wave_type
         self.feature_type = feature_type
@@ -73,25 +75,39 @@ class ADreSS2020Dataset(Dataset):
         if data_type == 'audio':
             self.audio_files, self.labels = self._load_audio_data()
 
+        if data_type == 'text':
+            self.text_data = self._load_text_data()
+
         # Preprocess data
-        if self.feature_type == 'mfcc':
+        if data_type == 'audio' and self.feature_type == 'mfcc':
             preprocess_path = ADReSS2020_DATAPATH + '/preprocessed/'
             X_name = f'mfcc_X_{self.split}.npy'
             y_name = f'mfcc_y_{self.split}.npy'
 
             if os.path.exists(preprocess_path + X_name) and os.path.exists(preprocess_path + y_name):
-                self.preprocess = np.load(preprocess_path + X_name), np.load(preprocess_path + y_name)
+                self.preprocess_audio = np.load(preprocess_path + X_name), np.load(preprocess_path + y_name)
             else:
-                self.preprocess = self._preprocess_mfcc(self.audio_files, self.labels)
+                self.preprocess_audio = self._preprocess_mfcc(self.audio_files, self.labels)
 
-        else:
-            self.preprocess = prepare_test_data(self.audio_files, self.labels)
+        elif data_type == 'audio':
+            self.preprocess_audio = prepare_test_data(self.audio_files, self.labels)
+
+        elif data_type == 'text':
+            self.text_data = self._preprocess_text()
 
     def __len__(self):
-        return len(self.preprocess[0])
+        if self.data_type == 'audio':
+            return len(self.preprocess_audio[0])
+        elif self.data_type == 'text':
+            return len(self.text_data)
     
     def __getitem__(self, idx):
-        return np.expand_dims(self.preprocess[0][idx], -1).astype(np.float32), self.preprocess[1][idx]
+        if self.data_type == 'audio':
+            return np.expand_dims(self.preprocess_audio[0][idx], -1).astype(np.float32), self.preprocess_audio[1][idx]
+        
+        elif self.data_type == 'text':
+            return torch.tensor(self.text_data['encoded'][idx], dtype=torch.long), \
+                   torch.tensor(self.text_data['label'][idx], dtype=torch.long)
     
     def _load_audio_data(self):
         train_audio_files, train_labels, test_audio_files, test_labels = load_audio_data(data_name='ADReSS2020')
@@ -103,6 +119,9 @@ class ADreSS2020Dataset(Dataset):
             labels = test_labels
 
         return audio_files, labels
+    
+    def _load_text_data(self):
+        return get_chat_data(self.split)
     
     def _preprocess_mfcc(self, audio_files, labels):
         custom_window_size = 1024
@@ -161,6 +180,16 @@ class ADreSS2020Dataset(Dataset):
             np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'mfcc_y_test.npy', y)
 
         return X, y
+    
+    def _preprocess_text(self):
+        enc = tiktoken.get_encoding('gpt2') # Have 50257 tokens
+        enc._special_tokens.update({'<|pad|>': 50257})
+        self.text_data['encoded'] = self.text_data['tokens'].apply(lambda x: enc.encode(" ".join(x),
+                                                                                      allowed_special={'<|pad|>'}))
+        self.text_data['encoded']  = self.text_data['encoded'].apply(split_tokens)
+        self.text_data = self.text_data.explode('encoded').reset_index(drop=True)
+        
+        return self.text_data
 
 def load_audio_data(data_name='ADReSS2020'):
     """Loads data from a CSV file.
@@ -242,7 +271,7 @@ def create_dataloader(data_name, data_type, batch_size=32, feature_type='mfcc', 
 if __name__ == "__main__":
     start = time.time()
 
-    train_loader, val_loader, test_loader = create_dataloader('ADReSS2020', 'audio', batch_size=32, feature_type='mfcc')
+    train_loader, val_loader, test_loader = create_dataloader('ADReSS2020', data_type='text', batch_size=32)
 
     print("Time taken: ", f'{time.time() - start:.2f} seconds')
     start = time.time()

@@ -218,7 +218,10 @@ def main():
     print(args)
     # Create config file from the arguments
     feature_type = 'mfcc' if args.feature_type == 'MFCC' else 'mel_delta_delta2' if args.feature_type == 'LogmelDelta' else 'waveform'
-    name_ex = args.data_name + '_' + args.model + '_' + args.wave_type + '_' + feature_type + \
+    text_name = 'text'
+    audio_name = 'audio'+ '_' + args.wave_type + '_' + feature_type
+    type_name = text_name if args.data_type == 'text' else audio_name
+    name_ex = args.data_name + '_' + args.model + '_' + type_name + \
               '_' + str(args.epochs) + 'epochs' + '_bs' + str(args.batch_size) + '_lr' + str(args.lr) + \
               '_hs' + str(args.hidden_size) + '_do' + str(args.dropout)
     name_config = name_ex + '.yaml'
