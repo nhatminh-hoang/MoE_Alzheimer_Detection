@@ -1,7 +1,9 @@
 tqdm
 
-torch
-torchaudio
+torch 
+torchvision 
+torchaudio 
+--index-url https://download.pytorch.org/whl/cu118
 torchinfo
 
 pylangacq
