@@ -171,4 +171,6 @@ data/
 
 # Models weights folder
 models/saved_models/
+models/ModernBERT-base_model/
+models/ModernBERT-base_tokenizer/
 train_outs/
