@@ -259,7 +259,7 @@ class TransformerModel(nn.Module):
         super(TransformerModel, self).__init__()
         self.emb = nn.Linear(input_size, hidden_size)
         self.layers = nn.ModuleList([TransformerBlock(hidden_size, hidden_size, hidden_size, drop_out, n_heads) 
-                                          for _ in range(n_layers-1)])
+                                          for _ in range(n_layers)])
         self.fc = nn.Linear(hidden_size * seq_length, 1)
 
     def forward(self, x):
