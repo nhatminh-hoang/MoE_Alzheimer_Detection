@@ -189,8 +189,9 @@ def main():
     parser = argparse.ArgumentParser(description='Train a model')
     parser.add_argument('--data_name', type=str, help='Name of the dataset', default='ADReSS2020')
     parser.add_argument('--data_type', type=str, help='Type of data', default='audio')
+    parser.add_argument('--text_type', type=str, help='Type of text', default='full')
     parser.add_argument('--wave_type', type=str, help='Type of waveform', default='full')
-    parser.add_argument('--feature_type', type=str, help='Use features {MFCC, LogmelDelta}', default='None')
+    parser.add_argument('--audio_type', type=str, help='Use features {MFCC, LogmelDelta}', default='None')
 
     parser.add_argument('--model', type=str, help='Model name')
     parser.add_argument('--flatten', type=bool, help='Flatten the input', default=False)
@@ -218,9 +219,9 @@ def main():
     
     print(args)
     # Create config file from the arguments
-    feature_type = 'mfcc' if args.feature_type == 'MFCC' else 'mel_delta_delta2' if args.feature_type == 'LogmelDelta' else 'waveform'
-    text_name = 'text'
-    audio_name = 'audio'+ '_' + args.wave_type + '_' + feature_type
+    audio_type = 'mfcc' if args.audio_type == 'MFCC' else 'mel_delta_delta2' if args.audio_type == 'LogmelDelta' else 'waveform'
+    text_name = 'text' + '_' + args.text_type
+    audio_name = 'audio'+ '_' + args.wave_type + '_' + audio_type
     type_name = text_name if args.data_type == 'text' else audio_name
     name_ex = args.data_name + '_' + args.model + '_' + type_name + \
               '_' + str(args.epochs) + 'epochs' + '_bs' + str(args.batch_size) + '_lr' + str(args.lr) + \
@@ -236,10 +237,11 @@ def main():
     print(config)
     # Load data
     train_loader, val_loader, test_loader = create_dataloader(data_type=config['data_type'],
-                                                              feature_type=feature_type,
-                                                              batch_size=config['batch_size'],
                                                               data_name=config['data_name'],
-                                                              wave_type=config['wave_type'])
+                                                              wave_type=config['wave_type'],
+                                                              feature_type=config['audio_type'],
+                                                              text_type=config['text_type'],
+                                                              batch_size=config['batch_size'])
     input_dummy = next(iter(train_loader))[0]
     input_shape = input_dummy.shape
     if config['flatten']:

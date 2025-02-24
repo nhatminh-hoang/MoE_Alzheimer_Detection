@@ -253,3 +253,19 @@ class TransformerBlock(nn.Module):
         x = self.mha(x)
         x = self.ffn(x)
         return x
+
+class TransformerModel(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size, drop_out, seq_length=300, n_heads=4, n_layers=4):
+        super(TransformerModel, self).__init__()
+        self.emb = nn.Linear(input_size, hidden_size)
+        self.layers = nn.ModuleList([TransformerBlock(hidden_size, hidden_size, hidden_size, drop_out, n_heads) 
+                                          for _ in range(n_layers-1)])
+        self.fc = nn.Linear(hidden_size * seq_length, 1)
+
+    def forward(self, x):
+
+        x = self.emb(x)
+        for l in self.layers:
+            x = l(x)
+        x = nn.Sigmoid()(self.fc(x.view(x.size(0), -1)))
+        return x

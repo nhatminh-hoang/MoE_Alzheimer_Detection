@@ -1,0 +1,14 @@
+audio_type: None
+batch_size: 256
+data_name: ADReSS2020
+data_type: text
+dropout: 0.5
+early_stop: 1000
+epochs: 1000
+flatten: false
+hidden_size: 16
+lr: 0.0001
+model: Transformer
+output_size: 2
+text_type: full
+wave_type: full

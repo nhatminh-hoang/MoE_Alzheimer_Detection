@@ -67,10 +67,13 @@ class ADreSS2020Dataset(Dataset):
         (Waveform, Sample rate) of the audio file
         Label of the audio file
     '''
-    def __init__(self, data_path, data_type, split, wave_type='full', feature_type='mfcc'):
+    def __init__(self, data_path, data_type, split, 
+                 text_type='full',
+                 wave_type='full', feature_type='mfcc'):
         self.data_path = data_path
         self.data_type = data_type
         self.split = split
+        self.text_type = text_type
         self.wave_type = wave_type
         self.feature_type = feature_type
 
@@ -117,7 +120,10 @@ class ADreSS2020Dataset(Dataset):
                     self.preprocess_audio[1][idx]
         
         elif self.data_type == 'text':
-            return self.preprocess_text[0][idx], self.preprocess_text[1][idx]
+            if self.text_type == 'full':
+                return self.preprocess_text[0][idx], self.preprocess_text[1][idx]
+            elif self.text_type == 'sum':
+                return np.sum(self.preprocess_text[0][idx], axis=0), self.preprocess_text[1][idx]
     
     def _load_audio_data(self):
         train_audio_files, train_labels, test_audio_files, test_labels = load_audio_data(data_name='ADReSS2020')
@@ -277,25 +283,68 @@ def create_audio_data_loaders(data_type='audio',
 
     return train_loader, val_loader, test_loader
 
-def create_dataloader(data_name, data_type, batch_size=32, feature_type='mfcc', wave_type='full'):
+def create_text_data_loaders(data_type='text', 
+                             data_name='ADReSS2020',
+                             text_type='full',
+                             batch_size=32):
+    """Creates PyTorch DataLoaders for training and testing sets.
+
+    Args:
+
+        mfcc (bool): Whether to use MFCC features.
+        batch_size (int): Batch size for the DataLoaders.
+
+    Returns:
+        torch.utils.data.DataLoader, torch.utils.data.DataLoader, torch.utils.data.DataLoader: DataLoaders for training, validation, and testing sets.
+    """
+    # Make sure the results are reproducible and training data and validation data cannot overlap
+    generator = torch.Generator()
+    generator.manual_seed(42)
+
+    # Create Datasets
+    if data_name == 'ADReSS2020':
+        train_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, data_type=data_type, split='train', text_type=text_type)
+        test_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, data_type=data_type, split='test', text_type=text_type)
+
+    # val_ds, train_ds = random_split(train_ds, [0.2, 0.8], generator=generator)
+    val_ds = test_ds
+
+    # Create DataLoaders
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
+    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
+
+    return train_loader, val_loader, test_loader
+
+def create_dataloader(data_name, data_type, batch_size=32, 
+                      text_type='full',
+                      feature_type='mfcc', wave_type='full'):
     """Creates PyTorch DataLoader for the specified dataset.
 
     Args:
         data_name (str): Name of the dataset to load.
         data_type (str): Type of data to load (e.g., 'train', 'test').
         batch_size (int): Batch size for the DataLoader.
-        mfcc (bool): Whether to use MFCC features.
+        text_type (str): Type of text feature to use (e.g., 'full', 'sum').
+        feature_type (str): Type of feature to use (e.g., 'mfcc', 'spectrogram').
+        wave_type (str): Type of audio waveform to use (e.g., 'full', 'chunk').
 
     Returns:
         torch.utils.data.DataLoader: DataLoader for the specified dataset.
     """
     # Load data
 
-    train_loader, val_loader, test_loader = create_audio_data_loaders(data_type=data_type,
-                                                                      data_name=data_name,
-                                                                      feature_type=feature_type, 
-                                                                      batch_size=batch_size, 
-                                                                      wave_type=wave_type)
+    if data_type == 'audio':
+        train_loader, val_loader, test_loader = create_audio_data_loaders(data_type=data_type,
+                                                                          data_name=data_name,
+                                                                          feature_type=feature_type, 
+                                                                          batch_size=batch_size, 
+                                                                          wave_type=wave_type)
+    elif data_type == 'text':
+        train_loader, val_loader, test_loader = create_text_data_loaders(data_type=data_type,
+                                                                         data_name=data_name,
+                                                                         batch_size=batch_size,
+                                                                         text_type=text_type)
     print("DataLoaders created successfully!")
 
     return train_loader, val_loader, test_loader
@@ -303,7 +352,7 @@ def create_dataloader(data_name, data_type, batch_size=32, feature_type='mfcc', 
 if __name__ == "__main__":
     start = time.time()
 
-    train_loader, val_loader, test_loader = create_dataloader('ADReSS2020', data_type='text', batch_size=32)
+    train_loader, val_loader, test_loader = create_dataloader('ADReSS2020', data_type='text', text_type='sum', batch_size=32)
 
     print("Time taken: ", f'{time.time() - start:.2f} seconds')
     start = time.time()
