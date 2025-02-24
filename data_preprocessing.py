@@ -200,8 +200,8 @@ class ADreSS2020Dataset(Dataset):
     def _preprocess_text_data(self):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model_id = "answerdotai/ModernBERT-base"
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
-        bert_model = ModernBertModel.from_pretrained(model_id).to(device)
+        tokenizer = AutoTokenizer.from_pretrained('./models/ModernBERT-base_tokenizer')
+        bert_model = ModernBertModel.from_pretrained('./models/ModernBERT-base_model').to(device)
         bert_model.eval()
         
         preprocessed_text_data = []
