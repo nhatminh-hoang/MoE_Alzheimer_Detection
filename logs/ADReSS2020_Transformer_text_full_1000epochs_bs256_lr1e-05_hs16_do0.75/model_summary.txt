@@ -13,15 +13,18 @@ TransformerModel                         [108, 1]                  --
 │    └─TransformerBlock: 2-3             [108, 300, 16]            --
 │    │    └─MultiHeadAttention: 3-5      [108, 300, 16]            1,120
 │    │    └─FFN: 3-6                     [108, 300, 16]            8,496
+│    └─TransformerBlock: 2-4             [108, 300, 16]            --
+│    │    └─MultiHeadAttention: 3-7      [108, 300, 16]            1,120
+│    │    └─FFN: 3-8                     [108, 300, 16]            8,496
 ├─Linear: 1-3                            [108, 1]                  4,801
 ==========================================================================================
-Total params: 45,953
-Trainable params: 45,953
+Total params: 55,569
+Trainable params: 55,569
 Non-trainable params: 0
-Total mult-adds (Units.MEGABYTES): 4.96
+Total mult-adds (Units.MEGABYTES): 6.00
 ==========================================================================================
 Input size (MB): 99.53
-Forward/backward pass size (MB): 290.30
-Params size (MB): 0.18
-Estimated Total Size (MB): 390.02
+Forward/backward pass size (MB): 385.69
+Params size (MB): 0.22
+Estimated Total Size (MB): 485.45
 ==========================================================================================
