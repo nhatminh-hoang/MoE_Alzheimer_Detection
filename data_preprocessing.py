@@ -68,14 +68,15 @@ class ADreSS2020Dataset(Dataset):
         Label of the audio file
     '''
     def __init__(self, data_path, data_type, split, 
-                 text_type='full',
-                 wave_type='full', feature_type='mfcc'):
+                 text_type='full', text_feature_type='modernbert-base',
+                 wave_type='full', audio_feature_type='mfcc'):
         self.data_path = data_path
         self.data_type = data_type
         self.split = split
         self.text_type = text_type
         self.wave_type = wave_type
-        self.feature_type = feature_type
+        self.text_feature_type = text_feature_type
+        self.audio_feature_type = audio_feature_type
 
         preprocess_path = ADReSS2020_DATAPATH + '/preprocessed/'
         X_name = f'X_{self.split}.npy'
@@ -86,8 +87,8 @@ class ADreSS2020Dataset(Dataset):
             self.audio_files, self.labels = self._load_audio_data()
 
         if data_type == 'text':
-            X_name = 'text_' + X_name
-            y_name = 'text_' + y_name
+            X_name = 'text_' + f'{text_feature_type}_' + X_name
+            y_name = 'text_' + f'{text_feature_type}_' + y_name
 
             self.text_data = self._load_text_data()
             if os.path.exists(preprocess_path + X_name) and os.path.exists(preprocess_path + y_name):
@@ -96,9 +97,9 @@ class ADreSS2020Dataset(Dataset):
                 self.preprocess_text = self._preprocess_text_data()
 
         # Preprocess data
-        if data_type == 'audio' and self.feature_type == 'mfcc':
-            X_name = 'mfcc_' + X_name
-            y_name = 'mfcc_' + y_name
+        if data_type == 'audio' and audio_feature_type == 'mfcc':
+            X_name = 'audio_' + 'mfcc_' + X_name
+            y_name = 'audio_' + 'mfcc_' + y_name
 
             if os.path.exists(preprocess_path + X_name) and os.path.exists(preprocess_path + y_name):
                 self.preprocess_audio = np.load(preprocess_path + X_name), np.load(preprocess_path + y_name)
@@ -199,9 +200,14 @@ class ADreSS2020Dataset(Dataset):
     
     def _preprocess_text_data(self):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        model_id = "answerdotai/ModernBERT-base"
-        tokenizer = AutoTokenizer.from_pretrained('./models/ModernBERT-base_tokenizer')
-        bert_model = ModernBertModel.from_pretrained('./models/ModernBERT-base_model').to(device)
+        if self.text_feature_type == 'modernbert-base':
+            model_id = "answerdotai/ModernBERT-base"
+            id = "ModernBERT-base"
+        elif self.text_feature_type == 'modernbert-large':
+            model_id = "answerdotai/ModernBERT-large"
+            id = "ModernBERT-large"
+        tokenizer = AutoTokenizer.from_pretrained(f'./models/{id}_tokenizer')
+        bert_model = ModernBertModel.from_pretrained(f'./models/{id}_model').to(device)
         bert_model.eval()
         
         preprocessed_text_data = []
@@ -252,7 +258,7 @@ def load_audio_data(data_name='ADReSS2020'):
 
 def create_audio_data_loaders(data_type='audio', 
                               data_name='ADReSS2020',
-                              wave_type='full', feature_type='mfcc',
+                              wave_type='full', audio_feature_type='mfcc',
                               batch_size=32):
     """Creates PyTorch DataLoaders for training and testing sets.
 
@@ -270,8 +276,8 @@ def create_audio_data_loaders(data_type='audio',
 
     # Create Datasets
     if data_name == 'ADReSS2020':
-        train_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, data_type=data_type, split='train', wave_type=wave_type, feature_type=feature_type)
-        test_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, data_type=data_type, split='test', wave_type=wave_type, feature_type=feature_type)
+        train_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, data_type=data_type, split='train', wave_type=wave_type, audio_feature_type=audio_feature_type)
+        test_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, data_type=data_type, split='test', wave_type=wave_type, audio_feature_type=audio_feature_type)
 
     # val_ds, train_ds = random_split(train_ds, [0.2, 0.8], generator=generator)
     val_ds = test_ds
@@ -286,6 +292,7 @@ def create_audio_data_loaders(data_type='audio',
 def create_text_data_loaders(data_type='text', 
                              data_name='ADReSS2020',
                              text_type='full',
+                             text_feature_type='modernbert-base',
                              batch_size=32):
     """Creates PyTorch DataLoaders for training and testing sets.
 
@@ -303,8 +310,8 @@ def create_text_data_loaders(data_type='text',
 
     # Create Datasets
     if data_name == 'ADReSS2020':
-        train_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, data_type=data_type, split='train', text_type=text_type)
-        test_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, data_type=data_type, split='test', text_type=text_type)
+        train_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, data_type=data_type, split='train', text_type=text_type, text_feature_type=text_feature_type)
+        test_ds = ADreSS2020Dataset(ADReSS2020_DATAPATH, data_type=data_type, split='test', text_type=text_type, text_feature_type=text_feature_type)
 
     # val_ds, train_ds = random_split(train_ds, [0.2, 0.8], generator=generator)
     val_ds = test_ds
@@ -317,8 +324,8 @@ def create_text_data_loaders(data_type='text',
     return train_loader, val_loader, test_loader
 
 def create_dataloader(data_name, data_type, batch_size=32, 
-                      text_type='full',
-                      feature_type='mfcc', wave_type='full'):
+                      text_type='full', text_feature_type='modernbert-base',
+                      wave_type='full', audio_feature_type='mfcc'):
     """Creates PyTorch DataLoader for the specified dataset.
 
     Args:
@@ -326,7 +333,7 @@ def create_dataloader(data_name, data_type, batch_size=32,
         data_type (str): Type of data to load (e.g., 'train', 'test').
         batch_size (int): Batch size for the DataLoader.
         text_type (str): Type of text feature to use (e.g., 'full', 'sum').
-        feature_type (str): Type of feature to use (e.g., 'mfcc', 'spectrogram').
+        audio_feature_type (str): Type of feature to use (e.g., 'mfcc', 'spectrogram').
         wave_type (str): Type of audio waveform to use (e.g., 'full', 'chunk').
 
     Returns:
@@ -337,14 +344,15 @@ def create_dataloader(data_name, data_type, batch_size=32,
     if data_type == 'audio':
         train_loader, val_loader, test_loader = create_audio_data_loaders(data_type=data_type,
                                                                           data_name=data_name,
-                                                                          feature_type=feature_type, 
-                                                                          batch_size=batch_size, 
-                                                                          wave_type=wave_type)
+                                                                          wave_type=wave_type,
+                                                                          audio_feature_type=audio_feature_type, 
+                                                                          batch_size=batch_size)
     elif data_type == 'text':
         train_loader, val_loader, test_loader = create_text_data_loaders(data_type=data_type,
                                                                          data_name=data_name,
-                                                                         batch_size=batch_size,
-                                                                         text_type=text_type)
+                                                                         text_type=text_type,
+                                                                         text_feature_type=text_feature_type,
+                                                                         batch_size=batch_size)
     print("DataLoaders created successfully!")
 
     return train_loader, val_loader, test_loader
