@@ -79,30 +79,30 @@ class ADreSS2020Dataset(Dataset):
         self.audio_feature_type = audio_feature_type
 
         preprocess_path = ADReSS2020_DATAPATH + '/preprocessed/'
-        X_name = f'X_{self.split}.npy'
-        y_name = f'y_{self.split}.npy'
+        self.X_name = f'X_{self.split}.npy'
+        self.y_name = f'y_{self.split}.npy'
 
         # Load data
         if data_type == 'audio':
             self.audio_files, self.labels = self._load_audio_data()
 
         if data_type == 'text':
-            X_name = 'text_' + f'{text_feature_type}_' + X_name
-            y_name = 'text_' + f'{text_feature_type}_' + y_name
+            self.X_name = 'text_' + f'{text_feature_type}_' + self.X_name
+            self.y_name = 'text_' + f'{text_feature_type}_' + self.y_name
 
             self.text_data = self._load_text_data()
-            if os.path.exists(preprocess_path + X_name) and os.path.exists(preprocess_path + y_name):
-                self.preprocess_text = np.load(preprocess_path + X_name), np.load(preprocess_path + y_name)
+            if os.path.exists(preprocess_path + self.X_name) and os.path.exists(preprocess_path + self.y_name):
+                self.preprocess_text = np.load(preprocess_path + self.X_name), np.load(preprocess_path + self.y_name)
             else:
                 self.preprocess_text = self._preprocess_text_data()
 
         # Preprocess data
         if data_type == 'audio' and audio_feature_type == 'mfcc':
-            X_name = 'audio_' + 'mfcc_' + X_name
-            y_name = 'audio_' + 'mfcc_' + y_name
+            self.X_name = 'audio_' + 'mfcc_' + self.X_name
+            self.y_name = 'audio_' + 'mfcc_' + self.y_name
 
-            if os.path.exists(preprocess_path + X_name) and os.path.exists(preprocess_path + y_name):
-                self.preprocess_audio = np.load(preprocess_path + X_name), np.load(preprocess_path + y_name)
+            if os.path.exists(preprocess_path + self.X_name) and os.path.exists(preprocess_path + self.y_name):
+                self.preprocess_audio = np.load(preprocess_path + self.X_name), np.load(preprocess_path + self.y_name)
             else:
                 self.preprocess_audio = self._preprocess_mfcc(self.audio_files, self.labels)
 
@@ -202,12 +202,12 @@ class ADreSS2020Dataset(Dataset):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         if self.text_feature_type == 'modernbert-base':
             model_id = "answerdotai/ModernBERT-base"
-            id = "ModernBERT-base"
+            ids = "ModernBERT-base"
         elif self.text_feature_type == 'modernbert-large':
             model_id = "answerdotai/ModernBERT-large"
-            id = "ModernBERT-large"
-        tokenizer = AutoTokenizer.from_pretrained(f'./models/{id}_tokenizer')
-        bert_model = ModernBertModel.from_pretrained(f'./models/{id}_model').to(device)
+            ids = "ModernBERT-large"
+        tokenizer = AutoTokenizer.from_pretrained(f'./models/{ids}_tokenizer')
+        bert_model = ModernBertModel.from_pretrained(f'./models/{ids}_model').to(device)
         bert_model.eval()
         
         preprocessed_text_data = []
@@ -225,13 +225,8 @@ class ADreSS2020Dataset(Dataset):
         X = np.array(preprocessed_text_data)
         y = self.text_data['label'].to_numpy()
         
-        # Save the preprocessed data
-        if self.split == 'train':
-            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'text_X_train.npy', X)
-            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'text_y_train.npy', y)
-        elif self.split == 'test':
-            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'text_X_test.npy', X)
-            np.save(ADReSS2020_DATAPATH + '/preprocessed/' + 'text_y_test.npy', y)
+        np.save(ADReSS2020_DATAPATH + '/preprocessed/' + self.X_name, X)
+        np.save(ADReSS2020_DATAPATH + '/preprocessed/' + self.y_name, y)
 
         return preprocessed_text_data
 
@@ -360,7 +355,7 @@ def create_dataloader(data_name, data_type, batch_size=32,
 if __name__ == "__main__":
     start = time.time()
 
-    train_loader, val_loader, test_loader = create_dataloader('ADReSS2020', data_type='text', text_type='sum', batch_size=32)
+    train_loader, val_loader, test_loader = create_dataloader('ADReSS2020', data_type='text', text_type='full', text_feature_type='modernbert-large', batch_size=32)
 
     print("Time taken: ", f'{time.time() - start:.2f} seconds')
     start = time.time()

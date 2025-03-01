@@ -190,6 +190,7 @@ def main():
     parser.add_argument('--data_name', type=str, help='Name of the dataset', default='ADReSS2020')
     parser.add_argument('--data_type', type=str, help='Type of data', default='audio')
     parser.add_argument('--text_type', type=str, help='Type of text', default='full')
+    parser.add_argument('--text_feature', type=str, help='Type of text feature', default='modernbert-base')
     parser.add_argument('--wave_type', type=str, help='Type of waveform', default='full')
     parser.add_argument('--audio_type', type=str, help='Use features {MFCC, LogmelDelta}', default='None')
 
@@ -220,7 +221,7 @@ def main():
     print(args)
     # Create config file from the arguments
     audio_type = 'mfcc' if args.audio_type == 'MFCC' else 'mel_delta_delta2' if args.audio_type == 'LogmelDelta' else 'waveform'
-    text_name = 'text' + '_' + args.text_type
+    text_name = 'text' + '_' + args.text_type + '_' + args.text_feature
     audio_name = 'audio'+ '_' + args.wave_type + '_' + audio_type
     type_name = text_name if args.data_type == 'text' else audio_name
     name_ex = args.data_name + '_' + args.model + '_' + type_name + \
@@ -239,8 +240,9 @@ def main():
     train_loader, val_loader, test_loader = create_dataloader(data_type=config['data_type'],
                                                               data_name=config['data_name'],
                                                               wave_type=config['wave_type'],
-                                                              feature_type=config['audio_type'],
+                                                              audio_feature_type=config['audio_type'],
                                                               text_type=config['text_type'],
+                                                              text_feature_type=config['text_feature'],
                                                               batch_size=config['batch_size'])
     input_dummy = next(iter(train_loader))[0]
     input_shape = input_dummy.shape

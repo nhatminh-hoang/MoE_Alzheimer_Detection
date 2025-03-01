@@ -173,4 +173,6 @@ data/
 models/saved_models/
 models/ModernBERT-base_model/
 models/ModernBERT-base_tokenizer/
+models/ModernBERT-large_model/
+models/ModernBERT-large_tokenizer/
 train_outs/
