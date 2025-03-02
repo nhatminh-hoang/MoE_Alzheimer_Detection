@@ -1,6 +1,7 @@
 import os
 import re
 import yaml
+import random
 from tqdm import tqdm
 
 import torch
@@ -452,3 +453,75 @@ def split_tokens(tokens, max_len=300):
         split = [tokens[i:i+max_len] for i in range(0, len(tokens), max_len)]
         split[-1] += [1] * (max_len - len(split[-1]))
         return split
+
+def load_special_tokens(file_path):
+    """Load special tokens from file"""
+    with open(file_path, 'r') as f:
+        # Load all special tokens and regular tokens
+        return [line.strip() for line in f if line.strip()]
+
+def add_brackets(token):
+    """Add <> brackets around a token"""
+    return f'<{token}>'
+
+def augment_dataset_with_special_tokens(tokens_list, special_tokens, 
+                                      bracket_prob=0.2, 
+                                      max_brackets_per_seq=2,
+                                      num_special_tokens=2):
+    """
+    Augment dataset by:
+    1. Adding special tokens from file
+    2. Randomly adding <> to some existing tokens
+    """
+    augmented_dataset = []
+    
+    for tokens in tokens_list:
+        augmented_tokens = tokens.copy()
+        
+        # 1. Add random special tokens - insert them one by one
+        selected_special = random.sample(special_tokens, 
+                                       k=min(num_special_tokens, len(special_tokens)))
+        for special_token in selected_special:
+            insert_pos = random.randint(0, len(augmented_tokens))
+            augmented_tokens.insert(insert_pos, special_token)
+        
+        # 2. Randomly add brackets to existing tokens
+        if random.random() < bracket_prob:
+            eligible_positions = [i for i, token in enumerate(tokens) 
+                               if '<' not in token and '>' not in token]
+            
+            if eligible_positions:
+                num_to_modify = random.randint(1, min(len(eligible_positions), 
+                                                    max_brackets_per_seq))
+                positions_to_modify = random.sample(eligible_positions, num_to_modify)
+                
+                for pos in positions_to_modify:
+                    augmented_tokens[pos] = add_brackets(augmented_tokens[pos])
+        
+        augmented_dataset.append(augmented_tokens)
+    
+    return augmented_dataset
+
+def back_translation_augment(text):
+    # Placeholder for back translation augmentation
+    # You would need to implement actual translation logic here
+    return text
+
+def synonym_replacement(text, n=1):
+    # Placeholder for synonym replacement
+    # You would need to implement word replacement logic here 
+    return text
+
+def random_swap(text, n=1):
+    # Randomly swap n pairs of words in the text
+    words = text.split()
+    for _ in range(n):
+        idx1, idx2 = random.sample(range(len(words)), 2)
+        words[idx1], words[idx2] = words[idx2], words[idx1]
+    return " ".join(words)
+
+def random_deletion(text, p=0.1):
+    # Randomly delete words with probability p
+    words = text.split()
+    words = [word for word in words if random.random() > p]
+    return " ".join(words)

@@ -141,7 +141,7 @@ def fit(name_ex, train_loader, val_loader, model, epochs, optimizer, criterion, 
         train_loss, train_acc = training(train_loader, model, optimizer, criterion, flatten, device=device)
         val_loss, val_acc = testing(val_loader, model, criterion, flatten, device=device)
 
-        lr = get_lr(epoch, warmup_steps=epochs//100+5, max_step=epochs, max_lr=learning_rate, min_lr=1e-6)
+        lr = get_lr(epoch, warmup_steps=epochs//100+5, max_step=epochs, max_lr=learning_rate, min_lr=learning_rate*1e-3)
         lr_list.append(lr)
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
@@ -217,8 +217,7 @@ def main():
     # If the early stop is not a number, set it to epochs
     if not isinstance(args.early_stop, int):
         args.early_stop = args.epochs
-    
-    print(args)
+        
     # Create config file from the arguments
     audio_type = 'mfcc' if args.audio_type == 'MFCC' else 'mel_delta_delta2' if args.audio_type == 'LogmelDelta' else 'waveform'
     text_name = 'text' + '_' + args.text_type + '_' + args.text_feature

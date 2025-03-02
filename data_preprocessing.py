@@ -204,31 +204,69 @@ class ADreSS2020Dataset(Dataset):
             model_id = "answerdotai/ModernBERT-base"
             ids = "ModernBERT-base"
         elif self.text_feature_type == 'modernbert-large':
-            model_id = "answerdotai/ModernBERT-large"
+            model_id = "answerdotai/ModernBERT-large" 
             ids = "ModernBERT-large"
         tokenizer = AutoTokenizer.from_pretrained(f'./models/{ids}_tokenizer')
         bert_model = ModernBertModel.from_pretrained(f'./models/{ids}_model').to(device)
         bert_model.eval()
         
         preprocessed_text_data = []
+        special_tokens_path = ADReSS2020_DATAPATH + '/special_tokens.txt'
+        if os.path.exists(special_tokens_path):
+            special_tokens = load_special_tokens(special_tokens_path)
+        else:
+            special_tokens = []
         
-        for idx in range(len(self.text_data)):
+        for idx in tqdm(range(len(self.text_data))):
             inputs = " ".join(self.text_data.iloc[idx]['tokens'])
-            inputs_token = tokenizer(inputs, 
-                                     return_tensors='pt',
-                                     truncation=True, 
-                                     padding='max_length', 
-                                     max_length=300).to(device)
-            outputs = bert_model(**inputs_token).last_hidden_state.squeeze(0).cpu().detach().numpy()
-            preprocessed_text_data.append(outputs)
-        print(len(preprocessed_text_data))
+            
+            # Only augment training data
+            if self.split == 'train':
+                # Create augmented versions
+                augmented_texts = [
+                    inputs,  # original
+                    " ".join(augment_dataset_with_special_tokens([self.text_data.iloc[idx]['tokens']], special_tokens,
+                                                        bracket_prob=0.3,
+                                                        max_brackets_per_seq=2,
+                                                        num_special_tokens=2)[0]),
+                    " ".join(augment_dataset_with_special_tokens([self.text_data.iloc[idx]['tokens']], special_tokens,
+                                                        bracket_prob=0.5,
+                                                        max_brackets_per_seq=3,
+                                                        num_special_tokens=3)[0]),
+                    " ".join(augment_dataset_with_special_tokens([self.text_data.iloc[idx]['tokens']], special_tokens,
+                                                        bracket_prob=0.7,
+                                                        max_brackets_per_seq=4,
+                                                        num_special_tokens=4)[0]),
+                    " ".join(augment_dataset_with_special_tokens([self.text_data.iloc[idx]['tokens']], special_tokens,
+                                                        bracket_prob=0.9,
+                                                        max_brackets_per_seq=5,
+                                                        num_special_tokens=5)[0])
+                ]
+            else:
+                augmented_texts = [inputs]
+                
+            for text in augmented_texts:
+                inputs_token = tokenizer(text,
+                                    return_tensors='pt', 
+                                    truncation=True,
+                                    padding='max_length',
+                                    max_length=300).to(device)
+                outputs = bert_model(**inputs_token).last_hidden_state.squeeze(0).cpu().detach().numpy()
+                preprocessed_text_data.append(outputs)
+                
+        print(f"Total samples after augmentation: {len(preprocessed_text_data)}")
         X = np.array(preprocessed_text_data)
-        y = self.text_data['label'].to_numpy()
         
-        np.save(ADReSS2020_DATAPATH + '/preprocessed/' + self.X_name, X)
+        # Create augmented labels
+        if self.split == 'train':
+            y = np.repeat(self.text_data['label'].to_numpy(), 5)  # 5 versions per sample
+        else:
+            y = self.text_data['label'].to_numpy()
+            
+        np.save(ADReSS2020_DATAPATH + '/preprocessed/' + self.X_name, X) 
         np.save(ADReSS2020_DATAPATH + '/preprocessed/' + self.y_name, y)
 
-        return preprocessed_text_data
+        return X, y
 
 def load_audio_data(data_name='ADReSS2020'):
     """Loads data from a CSV file.
@@ -355,7 +393,7 @@ def create_dataloader(data_name, data_type, batch_size=32,
 if __name__ == "__main__":
     start = time.time()
 
-    train_loader, val_loader, test_loader = create_dataloader('ADReSS2020', data_type='text', text_type='full', text_feature_type='modernbert-large', batch_size=32)
+    train_loader, val_loader, test_loader = create_dataloader('ADReSS2020', data_type='text', text_type='full', text_feature_type='modernbert-base', batch_size=32)
 
     print("Time taken: ", f'{time.time() - start:.2f} seconds')
     start = time.time()
